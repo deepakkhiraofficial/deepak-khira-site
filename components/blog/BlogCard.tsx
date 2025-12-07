@@ -11,7 +11,7 @@ export default function BlogCard({ title, excerpt, slug }: BlogCardProps) {
     <div className="border p-6 rounded-lg shadow hover:shadow-lg transition">
       <h3 className="text-xl font-semibold mb-2">{title}</h3>
       <p className="mb-4">{excerpt}</p>
-      <Link href={`/blogs/${slug}`} className="text-blue-600 hover:underline">
+      <Link href={`/blogs/${slug}`} className="text-blue-600 hover:underline" prefetch>
         Read More
       </Link>
     </div>

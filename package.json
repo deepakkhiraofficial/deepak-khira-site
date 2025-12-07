@@ -21,6 +21,7 @@
     "@tailwindcss/postcss": "^4.1.17",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
+    "critters": "^0.0.23",
     "framer-motion": "^12.23.25",
     "fs": "^0.0.1-security",
     "next": "16.0.7",

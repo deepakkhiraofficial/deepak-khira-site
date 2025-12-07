@@ -22,7 +22,7 @@ export default function BlogList() {
   return (
     <div className="grid md:grid-cols-3 gap-8 container mx-auto px-4">
       {blogs.map((blog) => (
-        <BlogCard key={blog.slug} {...blog} />
+        <BlogCard key={blog.slug} {...blog}  />
       ))}
     </div>
   );

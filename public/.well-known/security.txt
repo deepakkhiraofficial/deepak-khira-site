@@ -1,0 +1,36 @@
+# =========================================
+# security.txt for Deepak Khira Enterprises
+# https://securitytxt.org/
+# =========================================
+
+Contact: mailto:deepakkhushwah475110@gmail.com
+Contact: tel:+919109001109
+
+# Preferred language
+Preferred-Languages: en, hi
+
+# Policy page (optional — if you want to publish a security policy)
+Policy: https://deepakkhiraenterprises.com/security-policy
+
+# Acknowledgments (optional)
+# Acknowledgments: https://deepakkhiraenterprises.com/security/hall-of-fame
+
+# Hiring security researchers (optional)
+# Hiring: https://deepakkhiraenterprises.com/careers
+
+# Canonical URL for this file
+Canonical: https://deepakkhiraenterprises.com/.well-known/security.txt
+
+# Encryption for secure reports (optional PGP key)
+# Encryption: https://deepakkhiraenterprises.com/pgp-key.txt
+
+# Expiry of this security policy (1 year recommended)
+Expires: 2026-01-01T00:00:00.000Z
+
+
+Contact: mailto:deepakkhushwah475110@gmail.com
+Contact: tel:+919109001109
+Preferred-Languages: en, hi
+Policy: https://deepakkhiraenterprises.com/security-policy
+Canonical: https://deepakkhiraenterprises.com/.well-known/security.txt
+Expires: 2026-01-01T00:00:00.000Z

@@ -8,6 +8,7 @@ import {
   FaLinkedinIn,
   FaTwitter,
 } from "react-icons/fa";
+import { toast } from "react-toastify";
 
 export default function ContactForm() {
   const [name, setName] = useState("");
@@ -44,8 +45,11 @@ export default function ContactForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, message }),
       });
-
+      // toast.success("Message sent successfully!");
+      const data = await res.json();
+      console.log(data)
       if (res.ok) {
+        toast.success("Message sent successfully!");
         setStatus("success");
         setName("");
         setEmail("");

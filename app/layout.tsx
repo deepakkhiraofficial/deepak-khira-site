@@ -5,12 +5,61 @@ import { Providers } from "./providers";
 import Navbar from "@/components/layout/Navbar";
 import { ToastContainer} from 'react-toastify';
 import Footer from '@/components/layout/Footer';
+import 'react-toastify/dist/ReactToastify.css';
 
-
-export const metadata: Metadata = {
-  title: "Deepak Khira Enterprises",
-  description: "Business Website",
+export const metadata = {
+  title: {
+    default: "Deepak Khira Enterprises",
+    template: "%s | Deepak Khira Enterprises",
+  },
+  description:
+    "Professional online business solutions — web development, mobile apps, UI/UX, and branding.",
+  keywords: [
+    "Deepak Khira",
+    "Deepak Kushwah",
+    "web development",
+    "UI UX",
+    "business solutions",
+    "software development",
+    "Deepak Khira Enterprises",
+    "online seller",
+    "business",
+    "products",
+  ],
+  metadataBase: new URL("https://deepakkhiraenterprises.netlify.app/"),
+  openGraph: {
+    title: "Deepak Khira Enterprises",
+    description:
+      "Trusted online seller from India.Professional web development, UI/UX, software solutions, and online services.",
+    url: "https://deepakkhiraenterprises.netlify.app/",
+    siteName: "Deepak Khira Enterprises",
+    images: ["/og-image.jpg"],
+    locale: "en_IN",
+    type: "website",
+  },
+  robots:{
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Deepak Khira Enterprises",
+    description:
+      "Professional online services for web development, design, and business solutions.",
+    images: ["/twitter-image.jpg"],
+  },
+  alternates: {
+    canonical: "https://deepakkhiraenterprises.netlify.app/",
+  },
 };
+
 
 const inter = Inter({ subsets: ["latin"] });
 

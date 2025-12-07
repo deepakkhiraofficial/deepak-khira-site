@@ -1,0 +1,22 @@
+{
+  "name": "Deepak Khira Enterprises",
+  "short_name": "DK Enterprises",
+  "description": "Professional web development, mobile apps, UI/UX, and online business solutions.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f34",
+  "theme_color": "#1d4ed8",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

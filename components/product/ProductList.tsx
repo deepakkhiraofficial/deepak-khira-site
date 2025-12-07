@@ -5,21 +5,27 @@ import ProductCard from "./ProductCard";
 const products = [
   {
     title: "Enterprise Web App",
-    price: "$1999",
+    price: 1999,
     slug: "enterprise-web-app",
-    image: "/images/product1.jpg",
+    image: "/images/product1.webp",
   },
   {
     title: "Mobile App Pro",
-    price: "$1499",
+    price: 1499,
     slug: "mobile-app-pro",
-    image: "/images/product2.jpg",
+    image: "/images/product2.webp",
   },
   {
     title: "UI/UX Package",
-    price: "$999",
+    price: 999,
     slug: "ui-ux-package",
-    image: "/images/product3.jpg",
+    image: "/images/product3.webp",
+  },
+  {
+    title: "Digital Marketing Pack",
+    price: 799,
+    slug: "digital-marketing-pack",
+    image: "/images/product4.jpg",
   },
 ];
 
@@ -27,15 +33,15 @@ export default function ProductList() {
   return (
     <section className="py-20 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-6 md:px-16">
-        <h2 className="text-4xl md:text-5xl font-bold text-center text-gray-900 dark:text-white mb-12 animate-fade-in">
+        <h2 className="text-4xl md:text-5xl font-bold text-center text-gray-900 dark:text-white mb-16 animate-fade-in">
           Our Products
         </h2>
 
-        <div className="grid md:grid-cols-3 gap-10">
+        <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {products.map((product, index) => (
             <div
               key={product.slug}
-              className="transform transition-all duration-500 hover:-translate-y-3 hover:shadow-2xl rounded-2xl overflow-hidden bg-white dark:bg-gray-800 shadow-lg animate-fade-in"
+              className="animate-fade-in"
               style={{ animationDelay: `${index * 0.2}s` }}
             >
               <ProductCard {...product} />
@@ -44,7 +50,7 @@ export default function ProductList() {
         </div>
       </div>
 
-      {/* Tailwind animations */}
+      {/* Fade-in Animation */}
       <style>
         {`
           @keyframes fade-in {

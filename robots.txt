@@ -1,0 +1,28 @@
+# ===========================
+# robots.txt for Deepak Khira Enterprises
+# Fully SEO Optimized & Crawl-Friendly
+# ===========================
+
+# Allow all search engines to crawl the site
+User-agent: *
+Allow: /
+
+# Block sensitive system routes (optional & recommended)
+Disallow: /admin/
+Disallow: /api/private/
+Disallow: /dashboard/
+
+# Prevent crawling of unnecessary files/folders
+Disallow: /tmp/
+Disallow: /server/
+Disallow: /private-files/
+
+# Sitemap (IMPORTANT for SEO)
+Sitemap: https://deepakkhiraenterprises.com/sitemap.xml
+
+# Crawl-delay (optional for server protection)
+# Crawl-delay: 10
+
+# ===========================
+# End of robots.txt
+# ===========================
