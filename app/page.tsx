@@ -32,7 +32,7 @@ export const metadata = {
       "Deepak Khira Enterprises – Best Trusted Online Seller in India | Quality Products",
     description:
       "A trusted online seller offering high-quality products with fast shipping and 100% customer satisfaction.",
-    url: "https://deepakkhiraenterprises.netlify.app/",
+    url: "https://instagram.com/deepakkhiraofficial/",
     siteName: "Deepak Khira Enterprises",
     images: [
       {
@@ -52,7 +52,7 @@ export const metadata = {
     images: ["/business_logo.png"],
   },
   alternates: {
-    canonical: "https://deepakkhiraenterprises.netlify.app/",
+    canonical: "https://twitter.com/deepakkhira/",
   },
 };
 
