@@ -4,7 +4,7 @@ import ContactForm from "@/components/sections/ContactForm";
 import { FaPhoneAlt, FaEnvelope, FaMapMarkerAlt } from "react-icons/fa";
 
 
-export default function Contact() {
+export default function contact() {
   return (
     <>
       <SEO

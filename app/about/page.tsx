@@ -1,5 +1,76 @@
-// import React from "react";
 import Image from "next/image";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: {
+    default: "About Us | Deepak Khira Enterprises",
+    template: "%s | Deepak Khira Enterprises",
+  },
+  description:
+    "Learn about Deepak Khira Enterprises — a trusted digital solutions company offering web development, admin dashboards, e-commerce solutions, and business services.",
+  keywords: [
+    "Deepak Khira",
+    "Deepak Kushwah",
+    "About Us",
+    "digital solutions",
+    "web development",
+    "UI/UX design",
+    "software development",
+    "business solutions",
+    "online seller",
+    "e-commerce",
+    "admin dashboards",
+    "full stack developer",
+    "India",
+    "Madhya Pradesh",
+    "Deepak Khira Enterprises",
+  ],
+  metadataBase: new URL("https://deepakkhiraenterprises.netlify.app/"),
+  openGraph: {
+    title: "About Us | Deepak Khira Enterprises",
+    description:
+      "Discover the team, expertise, and mission behind Deepak Khira Enterprises. Trusted online seller and professional digital solutions provider from India.",
+    url: "https://deepakkhiraenterprises.netlify.app/about",
+    siteName: "Deepak Khira Enterprises",
+    images: [
+      {
+        url: "/og-about.jpg",
+        width: 1200,
+        height: 630,
+        alt: "About Deepak Khira Enterprises",
+      },
+    ],
+    locale: "en_IN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "About Us | Deepak Khira Enterprises",
+    description:
+      "Learn about Deepak Khira Enterprises, a trusted online seller and provider of premium web and software solutions.",
+    images: ["/twitter-about.jpg"],
+  },
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  alternates: {
+    canonical: "https://deepakkhiraenterprises.netlify.app/about",
+  },
+};
+
 export default function About() {
   return (
     <section className="min-h-screen bg-gradient-to-b from-indigo-50 to-white py-20 px-4">
@@ -88,10 +159,12 @@ export default function About() {
         {/* FOUNDER SECTION */}
         <div className="bg-white p-10 rounded-3xl shadow-xl border mb-20">
           <div className="grid md:grid-cols-2 gap-10 items-center">
-            <img
+            <Image
               src="/images/card.png"
               alt="Deepak Kushwah"
               className="rounded-2xl w-full h-80 object-cover shadow-md"
+              width={500}
+              height={500}
             />
 
             <div>

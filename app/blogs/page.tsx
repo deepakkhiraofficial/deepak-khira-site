@@ -1,15 +1,17 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import Image from "next/image";
 import Script from "next/script";
 import Navbar from "@/components/layout/Navbar";
 import NewsletterForm from "@/components/sections/NewsletterForm";
+import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
+import SEO from "@/components/SEO";
 
 // ======================= TYPES =======================
 type Post = {
   id: string;
   title: string;
+  slug: string;
   excerpt: string;
   content: string;
   image?: string;
@@ -20,14 +22,15 @@ type Post = {
   views?: number;
 };
 
-// ======================= MOCK DATA (5 POSTS) =======================
+// ======================= MOCK DATA =======================
 const MOCK_POSTS: Post[] = Array.from({ length: 5 }).map((_, i) => ({
   id: `post-${i + 1}`,
+  slug: `sample-blog-post-${i + 1}`,
   title: `Sample Blog Post #${i + 1}`,
   excerpt:
     "This is a short excerpt for the blog post. It shows what the article is about and entices the reader to click through.",
   content:
-    "Full content of the post goes here. In a real app you would fetch this from your CMS or API. This demo stores content locally.",
+    "Full content of the post goes here. In a real app you would fetch this from your CMS or API.",
   image: `/images/blog-${(i % 5) + 1}.jpg`,
   category: ["Tech", "Business", "Trading", "Marketing", "Content Creation"][
     i % 5
@@ -38,14 +41,14 @@ const MOCK_POSTS: Post[] = Array.from({ length: 5 }).map((_, i) => ({
   views: Math.floor(Math.random() * 2000),
 }));
 
-// ======================= AVATAR =======================
+// ======================= AVATAR COMPONENT =======================
 interface AvatarProps {
   name: string;
   size?: number;
   className?: string;
 }
 
-export function Avatar({ name, size = 32, className = "" }: AvatarProps) {
+function Avatar({ name, size = 32, className = "" }: AvatarProps) {
   const initials = name
     .split(" ")
     .map((s) => s[0])
@@ -75,7 +78,7 @@ export function Avatar({ name, size = 32, className = "" }: AvatarProps) {
 }
 
 // ======================= POST CARD =======================
-function PostCard({ post, onRead }: { post: Post; onRead: (p: Post) => void }) {
+const PostCard = ({ post }: { post: Post }) => {
   return (
     <motion.article
       layout
@@ -89,6 +92,7 @@ function PostCard({ post, onRead }: { post: Post; onRead: (p: Post) => void }) {
           width={600}
           height={400}
           className="w-full h-44 object-cover"
+          priority
         />
         <div className="absolute top-3 left-3 bg-white/90 dark:bg-gray-700/80 text-xs px-2 py-1 rounded-full font-medium">
           {post.category}
@@ -121,106 +125,76 @@ function PostCard({ post, onRead }: { post: Post; onRead: (p: Post) => void }) {
         <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
           {post.excerpt}
         </p>
-        <button
-          onClick={() => onRead(post)}
+        <a
+          href={`/blogs/${post.slug}`}
           className="text-sm px-3 py-1 rounded-full border border-indigo-500 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-gray-700 transition"
         >
           Read More
-        </button>
+        </a>
       </div>
     </motion.article>
   );
 }
 
-// ======================= BLOG PAGE =======================
-export default function Blogs() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [page, setPage] = useState(1);
-  const pageSize = 4; // show 4 posts per page
-  const [loading, setLoading] = useState(true);
-  const [openPost, setOpenPost] = useState<Post | null>(null);
+// ======================= BLOGS PAGE =======================
+export default function blogs() {
+  const trending = [...MOCK_POSTS]
+    .sort((a, b) => (b.views || 0) - (a.views || 0))
+    .slice(0, 5);
 
-  useEffect(() => {
-    setLoading(true);
-    const t = setTimeout(() => {
-      setPosts(MOCK_POSTS);
-      setLoading(false);
-    }, 500);
-    return () => clearTimeout(t);
-  }, []);
-
-  const categories = useMemo(
-    () => ["All", ...Array.from(new Set(posts.map((p) => p.category)))],
-    [posts]
-  );
-
-  const allTags = useMemo(
-    () => Array.from(new Set(posts.flatMap((p) => p.tags))),
-    [posts]
-  );
-
-  const filtered = useMemo(() => {
-    let res = posts.slice();
-    if (category !== "All") res = res.filter((p) => p.category === category);
-    if (search.trim()) {
-      const s = search.toLowerCase();
-      res = res.filter(
-        (p) =>
-          p.title.toLowerCase().includes(s) ||
-          p.excerpt.toLowerCase().includes(s)
-      );
-    }
-    if (selectedTags.length)
-      res = res.filter((p) => selectedTags.every((t) => p.tags.includes(t)));
-    return res;
-  }, [posts, category, search, selectedTags]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * pageSize, page * pageSize),
-    [filtered, page]
-  );
-
-  const trending = useMemo(
-    () =>
-      posts
-        .slice()
-        .sort((a, b) => (b.views || 0) - (a.views || 0))
-        .slice(0, 5),
-    [posts]
-  );
+  const categories = [
+    "All",
+    ...Array.from(new Set(MOCK_POSTS.map((p) => p.category))),
+  ];
+  const allTags = Array.from(new Set(MOCK_POSTS.flatMap((p) => p.tags)));
 
   return (
     <>
-      <Navbar />
-
-      {/* JSON-LD Structured Data */}
-      <Script type="application/ld+json" strategy="afterInteractive">
-        {JSON.stringify({
+      {/* SEO */}
+      <SEO
+        title="Blog | Deepak Khira Enterprises"
+        description="Explore articles, tutorials, and guides on web development, business, trading, content creation, marketing, and more by Deepak Khira Enterprises."
+        url="https://deepak-khira-enterprises.com/blogs"
+        image="/blog-banner.jpg"
+        keywords={[
+          "Deepak Khira Enterprises blog",
+          "web development tutorials",
+          "business guides",
+          "trading tips",
+          "content creation",
+          "digital marketing",
+          "online selling India",
+        ]}
+        schema={{
           "@context": "https://schema.org",
           "@type": "Blog",
           name: "Deepak Khira Enterprises Blog",
-          url: "https://deepakkhiraenterprises.netlify.app/blogs",
+          url: "https://deepak-khira-enterprises.com/blogs",
           description:
-            "Guides and insights on business, trading, online selling, content creation, video editing, and marketing.",
+            "Guides and insights on web development, business, trading, content creation, video editing, marketing, and online selling.",
           publisher: {
             "@type": "Organization",
             name: "Deepak Khira Enterprises",
-            logo: { "@type": "ImageObject", url: "/business_logo.png" },
+            logo: {
+              "@type": "ImageObject",
+              url: "https://deepak-khira-enterprises.com/logo.png",
+            },
           },
-          blogPost: posts.map((p) => ({
+          blogPost: MOCK_POSTS.map((p) => ({
             "@type": "BlogPosting",
             headline: p.title,
-            image: p.image || "/images/featured-blog.jpg",
+            image: p.image
+              ? `https://deepak-khira-enterprises.com${p.image}`
+              : "https://deepak-khira-enterprises.com/images/featured-blog.jpg",
             author: { "@type": "Person", name: p.author },
             datePublished: p.createdAt,
             description: p.excerpt,
+            url: `https://deepak-khira-enterprises.com/blogs/${p.slug}`,
           })),
-        })}
-      </Script>
+        }}
+      />
+
+      <Navbar />
 
       <main className="min-h-screen py-20 px-6 md:px-16 bg-gray-50 dark:bg-gray-900">
         {/* Hero Section */}
@@ -233,69 +207,16 @@ export default function Blogs() {
             selling, content creation, video editing, marketing, and resume
             building.
           </p>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search posts..."
-            className="mt-6 w-full md:w-2/3 rounded-full px-4 py-3 shadow-lg border-0 text-gray-700 dark:bg-gray-700 dark:text-white"
-          />
         </section>
 
-        {/* Blog & Sidebar */}
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-3 gap-10">
-          {/* Posts */}
+        {/* Posts Grid */}
+        <section className="max-w-7xl mx-auto grid lg:grid-cols-3 gap-10">
           <main className="lg:col-span-2 space-y-6">
-            {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {Array.from({ length: pageSize }).map((_, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 bg-white rounded-2xl shadow animate-pulse dark:bg-gray-800"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {paged.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    post={post}
-                    onRead={(p) => setOpenPost(p)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Pagination */}
-            <nav className="mt-8 flex items-center justify-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-2 rounded-md border bg-white dark:bg-gray-500 shadow"
-              >
-                Prev
-              </button>
-              {Array.from({ length: pageCount }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setPage(i + 1)}
-                  aria-current={page === i + 1 ? "page" : undefined}
-                  className={`px-3 py-2 rounded-md ${
-                    page === i + 1
-                      ? "bg-indigo-600 text-white"
-                      : "bg-white dark:bg-gray-500 border"
-                  }`}
-                >
-                  {i + 1}
-                </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {MOCK_POSTS.map((post) => (
+                <PostCard key={post.id} post={post} />
               ))}
-              <button
-                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                className="px-3 py-2 rounded-md border bg-white dark:bg-gray-500 shadow"
-              >
-                Next
-              </button>
-            </nav>
+            </div>
           </main>
 
           {/* Sidebar */}
@@ -347,58 +268,18 @@ export default function Blogs() {
               </h4>
               <div className="flex gap-2 flex-wrap">
                 {allTags.map((t) => (
-                  <button
+                  <span
                     key={t}
-                    onClick={() => setSelectedTags([t])}
                     className="px-3 py-1 text-sm bg-gray-100 font-bold dark:bg-gray-300 rounded-full"
                   >
                     #{t}
-                  </button>
+                  </span>
                 ))}
               </div>
             </div>
           </aside>
-        </div>
+        </section>
       </main>
-
-      {/* Post Modal */}
-      {openPost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <motion.div
-            initial={{ y: 8, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="max-w-3xl w-full bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-y-auto max-h-[90vh]"
-          >
-            <div className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {openPost.title}
-                </h2>
-                <button
-                  onClick={() => setOpenPost(null)}
-                  className="text-gray-500 dark:text-gray-400"
-                >
-                  Close
-                </button>
-              </div>
-              <Image
-                src={openPost.image || "/images/featured-blog.jpg"}
-                width={600}
-                height={400}
-                className="w-full h-64 object-cover mt-4 rounded-md"
-                alt={openPost.title}
-              />
-              <div className="mt-4 text-gray-700 dark:text-gray-300">
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  By {openPost.author} •{" "}
-                  {new Date(openPost.createdAt).toLocaleDateString()}
-                </div>
-                <div className="mt-3 leading-relaxed">{openPost.content}</div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </>
   );
 }
