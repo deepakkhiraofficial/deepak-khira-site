@@ -1,19 +1,21 @@
-import './globals.css';
+import "./globals.css";
 import type { Metadata } from "next";
-import {Inter} from 'next/font/google';
+import { Inter } from "next/font/google";
 import { Providers } from "./providers";
 import Navbar from "@/components/layout/Navbar";
-import { ToastContainer} from 'react-toastify';
-import Footer from '@/components/layout/Footer';
-import 'react-toastify/dist/ReactToastify.css';
+import Footer from "@/components/layout/Footer";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-export const metadata = {
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
   title: {
     default: "Deepak Khira Enterprises",
     template: "%s | Deepak Khira Enterprises",
   },
   description:
-    "Trusted Online Seller , Professional online business solutions — web development, mobile apps, UI/UX, and branding.",
+    "Trusted Online Seller, Professional business & digital services — web development, mobile apps, UI/UX, branding, and more.",
   keywords: [
     "Deepak Khira",
     "Deepak Kushwah",
@@ -21,81 +23,47 @@ export const metadata = {
     "UI UX",
     "business solutions",
     "software development",
-    "Deepak Khira Enterprises",
     "online seller",
-    "business",
-    "products",
-    "video editing",
-    "graphic design",
+    "trading",
     "digital marketing",
     "freelancing",
     "professional services",
     "India",
     "Madhya Pradesh",
-    "trusted seller",
-    "reliable services",
-    "custom software",
-    "ecommerce solutions",
+    "ecommerce",
     "branding",
-    "startup solutions",
-    "technology services",
-    "trader",
-    "content creator",
-    "resume builder",
-    "portfolio website",
-    "deepakkhiraenterprises",
-    "full stack developer",
-    "deepak khira web developer",
-    "deepak khira",
-    "deepak khira ui ux designer",
-    "deepak khira software developer",
-    "deepak khira freelancer",
-    "deepak khira business solutions",
-    "deepak khira digital marketing",
-    "deepak khira graphic designer",
-    "deepak khira video editor",
-    "deepak khira entrepreneur",
-    "deepak khira trader",
-    "deepak khira content creator",
-    "deepak khira resume builder",
-    "deepak khira portfolio website",
-    "deepak khira enterprises",
-    "deepak khira m.p.",
-    "deepak khira madhya pradesh",
-    "deepak khira india",
-    "deepak khira netlify",
-    "deepak khira verified seller",
-    "deepak khira trusted seller",
-    "deepak khira reliable services",
-    "deepak khira professional services",
-    "deepak khira ecommerce solutions",
-    "deepak kushwah",
-    "deepak kushwah online seller",
-    "deepak kushwah official",
-    "deepak khera official",
   ],
   metadataBase: new URL("https://deepakkhiraenterprises.netlify.app/"),
   openGraph: {
     title: "Deepak Khira Enterprises",
     description:
-      "Online Products • Trading • Digital Services • Content Creation. Trusted online seller from India.Professional web development, UI/UX, software solutions, and online services.",
+      "Online Products • Trading • Digital Services • Content Creation. Trusted online seller from India.",
     url: "https://deepakkhiraenterprises.netlify.app/",
     siteName: "Deepak Khira Enterprises",
-    images: ["/og-image.jpg"],
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Deepak Khira Enterprises",
+      },
+    ],
     locale: "en_IN",
     type: "website",
-
-    image: {
-      url: "/og-image.jpg",
-      width: 1200,
-      height: 630,
-      alt: "Deepak Khira Enterprises",
-    },
   },
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
+  twitter: {
+    card: "summary_large_image",
+    title: "Deepak Khira Enterprises",
+    description:
+      "Professional online services for web development, design, and business solutions.",
+    images: [
+      {
+        url: "/twitter-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Deepak Khira Enterprises",
+      },
+    ],
   },
   robots: {
     index: true,
@@ -108,42 +76,77 @@ export const metadata = {
       "max-snippet": -1,
     },
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "Deepak Khira Enterprises",
-    description:
-      "Professional online services for web development, design, and business solutions.",
-    images: ["/twitter-image.jpg"],
-  },
-  alternates: {
-    canonical: "https://facebook.com/deepakkhiraofficial",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
 };
 
-
-const inter = Inter({ subsets: ["latin"] });
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* 👇 IMPORTANT: ColorModeScript MUST BE IN HEAD */}
-        <script id="chakra-script" dangerouslySetInnerHTML={{
-          __html: `(function(){
-            try {
-              var theme = localStorage.getItem("chakra-ui-color-mode") || "light";
-              document.documentElement.style.setProperty("color-scheme", theme);
-              document.documentElement.setAttribute("data-theme", theme);
-            } catch(e){}
-          })();`
-        }} />
+        {/* Chakra UI Color Mode Script */}
+        <script
+          id="chakra-script"
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
+              try {
+                var theme = localStorage.getItem("chakra-ui-color-mode") || "light";
+                document.documentElement.style.setProperty("color-scheme", theme);
+                document.documentElement.setAttribute("data-theme", theme);
+              } catch(e){}
+            })();`,
+          }}
+        />
+
+        {/* Favicon & Icons */}
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="32x32"
+          href="/favicon-32x32.png"
+        />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="16x16"
+          href="/favicon-16x16.png"
+        />
+        <link rel="manifest" href="/site.webmanifest" />
+
+        {/* JSON-LD Structured Data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "Deepak Khira Enterprises",
+              url: "https://deepakkhiraenterprises.netlify.app/",
+              logo: "/business_logo.png",
+              sameAs: [
+                "https://facebook.com/deepakkhiraofficial",
+                "https://instagram.com/deepakkhiraofficial",
+                "https://linkedin.com/in/mrdeepakkushwah",
+              ],
+            }),
+          }}
+        />
       </head>
 
-      <body suppressHydrationWarning>
-      
+      <body className={inter.className} suppressHydrationWarning>
         <Navbar />
         <Providers>{children}</Providers>
-        <ToastContainer  />
+        <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
         <Footer />
       </body>
     </html>
