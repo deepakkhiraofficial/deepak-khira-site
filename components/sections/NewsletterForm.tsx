@@ -1,5 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState } from "react"; 
+// import { Toast } from "@chakra-ui/react";
+import { toast } from "react-toastify";
+
 
 export default function NewsletterForm() {
   const [email, setEmail] = useState("");
@@ -16,11 +19,13 @@ export default function NewsletterForm() {
     if (!emailRegex.test(email)) {
       setStatus("error");
       setMessage("Please enter a valid email address.");
+      toast.error("Please enter a valid email address.");
       return;
     }
 
     setStatus("subscribing");
     setMessage("Subscribing...");
+    toast.info("Subscribing...");
 
     try {
       const res = await fetch("/api/newsletter", {
@@ -28,18 +33,22 @@ export default function NewsletterForm() {
         body: JSON.stringify({ email }),
         headers: { "Content-Type": "application/json" },
       });
+      toast.dismiss();
 
       if (res.ok) {
+        toast.success("Subscribed successfully! 🎉");
         setStatus("success");
         setMessage("Subscribed successfully! 🎉");
         setEmail("");
       } else {
         setStatus("error");
         setMessage("Failed to subscribe. Please try again.");
+        toast.error("Failed to subscribe. Please try again.");
       }
     } catch (err) {
       setStatus("error");
       setMessage("Error subscribing. Please try again later.");
+      toast.error("Error subscribing. Please try again later.");
     }
   };
 

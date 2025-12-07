@@ -45,7 +45,7 @@ export default function ContactForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, message }),
       });
-      // toast.success("Message sent successfully!");
+    
       const data = await res.json();
       console.log(data)
       if (res.ok) {
@@ -57,9 +57,11 @@ export default function ContactForm() {
         setErrors({});
       } else {
         setStatus("error");
+        toast.error(data.error || "Failed to send message. Please try again.");
       }
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      toast.error("An unexpected error occurred. Please try again.");
+      console.error(error);
       setStatus("error");
     }
   };
@@ -71,9 +73,7 @@ export default function ContactForm() {
 
   return (
     <main className="relative lg-h-screen  from-blue-100 via-blue-50 to-blue-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex flex-col justify-center items-center px-6 md:px-16">
-      {/* Background pattern */}
-      {/* <div className="absolute inset-0 bg-[url('/contact-bg.png')] bg-no-repeat bg-center bg-cover opacity-10 dark:opacity-20 -z-10"></div> */}
-
+      
       {/* Contact Form Card */}
       <section className="relative max-w-lg w-full bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-10 flex flex-col gap-6 animate-fade-in">
         {status === "success" ? (

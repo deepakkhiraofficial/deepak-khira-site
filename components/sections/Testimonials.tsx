@@ -76,7 +76,7 @@ export default function Testimonials() {
                   />
                 )}
                 <p className="mb-6 text-gray-700 dark:text-gray-300 text-lg">
-                  "{t.message}"
+                  &quot;{t.message}&quot;
                 </p>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                   {t.name}

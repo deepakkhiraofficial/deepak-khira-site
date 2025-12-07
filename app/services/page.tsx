@@ -1,28 +1,55 @@
-"use client";
+import Script from "next/script";
+import ServicesGrid from "./ServicesGrid";
 
-import ServicesGrid from "@/components/sections/ServicesGrid";
+export const metadata = {
+  title:
+    "Our Services – Deepak Khira Enterprises | Online Seller & Digital Solutions",
+  description:
+    "Deepak Khira Enterprises offers professional services including trading, online selling, content creation, video editing, resume building, and review services.",
+};
 
 export default function Services() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-20 px-6 md:px-16 flex flex-col items-center">
-      {/* Subtle background image for SaaS premium effect */}
-      <div className="absolute inset-0 bg-[url('/services-bg.png')] bg-no-repeat bg-center bg-cover opacity-10 dark:opacity-20 -z-10"></div>
+    <>
+      {/* ORGANIZATION SCHEMA */}
+      <Script
+        id="org-schema"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "Deepak Khira Enterprises",
+            url: "https://deepakkhiraenterprises.netlify.app",
+            logo: "/business_logo.png",
+            contactPoint: {
+              "@type": "ContactPoint",
+              telephone: "+91-9109001109",
+              contactType: "Customer Support",
+            },
+          }),
+        }}
+      />
 
-      {/* Services Grid */}
-      <ServicesGrid />
+      <main
+        className="relative min-h-screen bg-gradient-to-br 
+        from-blue-50 via-blue-100 to-blue-50 
+        dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 
+        py-24 px-6 md:px-16 flex flex-col items-center"
+      >
+        <h1 className="text-4xl md:text-6xl font-extrabold text-blue-700 dark:text-blue-400 text-center mb-12">
+          Our Professional Services
+        </h1>
 
-      {/* Tailwind animations */}
-      <style>
-        {`
-          @keyframes fade-in {
-            0% { opacity: 0; transform: translateY(20px); }
-            100% { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fade-in {
-            animation: fade-in 0.8s ease-out forwards;
-          }
-        `}
-      </style>
-    </main>
+        <p className="text-center max-w-3xl text-gray-700 dark:text-gray-300 text-lg md:text-xl mb-16">
+          Deepak Khira Enterprises provides premium services including trading,
+          online selling, content creation, video editing, resume building, and
+          review services.
+        </p>
+
+        {/* FIXED CLIENT COMPONENT FOR ANIMATIONS */}
+        <ServicesGrid />
+      </main>
+    </>
   );
 }

@@ -6,6 +6,7 @@ import AboutUs from "@/components/sections/AboutUs";
 import Products from "@/app/products/page";
 import WhyChooseUs from "@/components/sections/WhyChooseUs";
 import WhatsAppButton from "@/components/sections/WhatsAppButton";
+import NewsletterForm from "@/components/sections/NewsletterForm";
 import Script from "next/script";
 
 // -------------------- SEO METADATA --------------------
@@ -111,6 +112,7 @@ export default function Home() {
         <AboutUs />
         <Products />
         <WhyChooseUs />
+        <NewsletterForm />
         <WhatsAppButton />
       </main>
     </>
