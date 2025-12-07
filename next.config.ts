@@ -1,14 +1,13 @@
 import type { NextConfig } from "next";
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    optimizeCss: false,
-  },
+const nextConfig: NextConfig = {
   reactStrictMode: true,
-  allowedDevOrigins: ['http://localhost:3000','10.243.165.43:3000',"http://deepakkhiraenterprises.in","https://deepakkhiraenterprises.in"],
-
-  /* config options here */
+  allowedDevOrigins: [
+    'http://localhost:3000',
+    '10.243.165.43:3000',
+    "http://deepakkhiraenterprises.in",
+    "https://deepakkhiraenterprises.in"
+  ],
 
   // ⚡ Performance
   compress: true,
@@ -20,9 +19,9 @@ const nextConfig = {
     minimumCacheTTL: 60 * 60 * 24 * 30,
   },
 
-  // ⚡ Caching
+  // ⚡ Experimental features
   experimental: {
-    optimizeCss: true,
+    optimizeCss: true, // merged value
     optimizePackageImports: [
       'lucide-react',
       'lodash',
@@ -48,7 +47,5 @@ const nextConfig = {
     ];
   },
 };
-
-
 
 export default nextConfig;
