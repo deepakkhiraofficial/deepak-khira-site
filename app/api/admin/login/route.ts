@@ -4,40 +4,83 @@ import User from "@/models/User";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+// ============================================================
+// ADMIN LOGIN API
+// ============================================================
+
 export async function POST(req: Request) {
   try {
-    // ========================================================
-    // DATABASE
-    // ========================================================
+    // ==========================================================
+    // 1. CHECK JWT CONFIGURATION
+    // ==========================================================
 
-    await connectDB();
+    const JWT_SECRET = process.env.JWT_SECRET;
 
-    // ========================================================
-    // REQUEST BODY
-    // ========================================================
+    if (!JWT_SECRET) {
+      console.error("ADMIN LOGIN: JWT_SECRET is missing.");
 
-    const body = await req.json();
-
-    const email =
-      typeof body.email === "string"
-        ? body.email.trim().toLowerCase()
-        : "";
-
-    const password =
-      typeof body.password === "string"
-        ? body.password
-        : "";
-
-    // ========================================================
-    // VALIDATION
-    // ========================================================
-
-    if (!email || !password) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Email and password are required.",
+          message: "Authentication service is not configured.",
+        },
+        { status: 500 }
+      );
+    }
+
+    // ==========================================================
+    // 2. CONNECT DATABASE
+    // ==========================================================
+
+    await connectDB();
+
+    // ==========================================================
+    // 3. READ REQUEST BODY
+    // ==========================================================
+
+    let body: unknown;
+
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ==========================================================
+    // 4. SAFE BODY EXTRACTION
+    // ==========================================================
+
+    const requestBody =
+      typeof body === "object" &&
+      body !== null
+        ? body as Record<string, unknown>
+        : {};
+
+    const email =
+      typeof requestBody.email === "string"
+        ? requestBody.email.trim().toLowerCase()
+        : "";
+
+    const password =
+      typeof requestBody.password === "string"
+        ? requestBody.password
+        : "";
+
+    // ==========================================================
+    // 5. VALIDATE EMAIL
+    // ==========================================================
+
+    if (!email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Email is required.",
         },
         { status: 400 }
       );
@@ -50,62 +93,82 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Please enter a valid email address.",
+          message: "Please enter a valid email address.",
         },
         { status: 400 }
       );
     }
 
-    // ========================================================
-    // JWT SECRET
-    // ========================================================
+    // ==========================================================
+    // 6. VALIDATE PASSWORD
+    // ==========================================================
 
-    const JWT_SECRET =
-      process.env.JWT_SECRET;
-
-    if (!JWT_SECRET) {
-      console.error(
-        "JWT_SECRET is not configured."
-      );
-
+    if (!password) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Authentication service is not configured.",
+          message: "Password is required.",
         },
-        { status: 500 }
+        { status: 400 }
       );
     }
 
-    // ========================================================
-    // FIND ADMIN
+    if (password.length < 6) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid email or password.",
+        },
+        { status: 401 }
+      );
+    }
+
+    // ==========================================================
+    // 7. FIND ADMIN USER
     //
-    // password has select:false in User model,
-    // so explicitly include it for authentication.
-    // ========================================================
+    // password is assumed to be select:false in User model.
+    // Therefore explicitly select it for authentication.
+    // ==========================================================
 
     const admin = await User.findOne({
       email,
       role: "admin",
     }).select("+password");
 
-    // Don't reveal whether the email exists.
+    // ==========================================================
+    // 8. GENERIC AUTHENTICATION ERROR
+    // ==========================================================
+
     if (!admin) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Invalid email or password.",
+          message: "Invalid email or password.",
         },
         { status: 401 }
       );
     }
 
-    // ========================================================
-    // VERIFY PASSWORD
-    // ========================================================
+    // ==========================================================
+    // 9. CHECK STORED PASSWORD
+    // ==========================================================
+
+    if (
+      typeof admin.password !== "string" ||
+      !admin.password
+    ) {
+      console.error(
+        "ADMIN LOGIN: Admin account has no valid password hash."
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid email or password.",
+        },
+        { status: 401 }
+      );
+    }
 
     const passwordValid =
       await bcrypt.compare(
@@ -117,23 +180,22 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Invalid email or password.",
+          message: "Invalid email or password.",
         },
         { status: 401 }
       );
     }
 
-    // ========================================================
-    // JWT EXPIRATION
-    // ========================================================
+    // ==========================================================
+    // 10. JWT EXPIRATION
+    // ==========================================================
 
     const expiresIn =
       process.env.JWT_EXPIRES_IN || "7d";
 
-    // ========================================================
-    // CREATE ADMIN JWT
-    // ========================================================
+    // ==========================================================
+    // 11. CREATE ADMIN JWT
+    // ==========================================================
 
     const token = jwt.sign(
       {
@@ -147,15 +209,14 @@ export async function POST(req: Request) {
       }
     );
 
-    // ========================================================
-    // RESPONSE
-    // ========================================================
+    // ==========================================================
+    // 12. CREATE RESPONSE
+    // ==========================================================
 
     const response = NextResponse.json(
       {
         success: true,
-        message:
-          "Admin login successful.",
+        message: "Admin login successful.",
         user: {
           id: admin._id.toString(),
           name: admin.name,
@@ -166,26 +227,37 @@ export async function POST(req: Request) {
       { status: 200 }
     );
 
-    // ========================================================
-    // HTTP-ONLY ADMIN COOKIE
-    // ========================================================
+    // ==========================================================
+    // 13. SET HTTP-ONLY ADMIN COOKIE
+    // ==========================================================
 
     response.cookies.set({
       name: "admin-token",
       value: token,
+
       httpOnly: true,
+
       secure:
         process.env.NODE_ENV === "production",
+
       sameSite: "strict",
+
       maxAge: 7 * 24 * 60 * 60,
+
       path: "/",
     });
+
+    // ==========================================================
+    // 14. RETURN SUCCESS
+    // ==========================================================
 
     return response;
   } catch (error: unknown) {
     console.error(
       "ADMIN LOGIN API ERROR:",
-      error
+      error instanceof Error
+        ? error.message
+        : error
     );
 
     return NextResponse.json(
