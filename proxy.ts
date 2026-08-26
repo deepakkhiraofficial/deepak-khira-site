@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import jwt from "jsonwebtoken";
 
 type AuthTokenPayload = {
   id: string;
@@ -11,53 +10,305 @@ type AuthTokenPayload = {
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// ============================================================
-// VERIFY JWT
-// ============================================================
+/**
+ * ============================================================
+ * BASE64URL → ARRAYBUFFER
+ * ============================================================
+ */
+function base64UrlToArrayBuffer(
+  base64Url: string
+): ArrayBuffer {
+  const base64 = base64Url
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
 
-function verifyToken(
+  const padded =
+    base64 +
+    "=".repeat(
+      (4 - (base64.length % 4)) % 4
+    );
+
+  const binary = atob(padded);
+
+  const bytes = new Uint8Array(
+    binary.length
+  );
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  /**
+   * Create a guaranteed standalone ArrayBuffer.
+   *
+   * This avoids TypeScript's ArrayBufferLike /
+   * SharedArrayBuffer compatibility issue.
+   */
+  const buffer = new ArrayBuffer(
+    bytes.byteLength
+  );
+
+  new Uint8Array(buffer).set(bytes);
+
+  return buffer;
+}
+
+/**
+ * ============================================================
+ * DECODE JWT PAYLOAD
+ * ============================================================
+ */
+function decodePayload(
   token: string
 ): AuthTokenPayload | null {
+  try {
+    const parts = token.split(".");
+
+    if (parts.length !== 3) {
+      return null;
+    }
+
+    const payloadBuffer =
+      base64UrlToArrayBuffer(parts[1]);
+
+    const payloadText =
+      new TextDecoder().decode(
+        payloadBuffer
+      );
+
+    const payload =
+      JSON.parse(
+        payloadText
+      ) as AuthTokenPayload;
+
+    /**
+     * Validate ID
+     */
+    if (
+      !payload ||
+      typeof payload.id !== "string" ||
+      !payload.id
+    ) {
+      return null;
+    }
+
+    /**
+     * Validate role
+     */
+    if (
+      payload.role !== "user" &&
+      payload.role !== "admin"
+    ) {
+      return null;
+    }
+
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ============================================================
+ * VERIFY JWT
+ *
+ * HS256 verification using Web Crypto API.
+ *
+ * This is compatible with Next.js Proxy / Edge runtime
+ * and avoids jsonwebtoken dependency inside proxy.ts.
+ * ============================================================
+ */
+async function verifyToken(
+  token: string
+): Promise<AuthTokenPayload | null> {
+  /**
+   * JWT secret must exist.
+   */
   if (!JWT_SECRET) {
     console.error(
-      "❌ JWT_SECRET is not configured."
+      "JWT_SECRET is not configured."
     );
 
     return null;
   }
 
   try {
-    const decoded = jwt.verify(
-      token,
-      JWT_SECRET
-    ) as AuthTokenPayload;
+    const parts = token.split(".");
 
-    if (!decoded?.id) {
+    /**
+     * JWT must have:
+     *
+     * header.payload.signature
+     */
+    if (parts.length !== 3) {
       return null;
     }
 
+    const [
+      encodedHeader,
+      encodedPayload,
+      encodedSignature,
+    ] = parts;
+
+    /**
+     * ========================================================
+     * DECODE HEADER
+     * ========================================================
+     */
+    const headerBuffer =
+      base64UrlToArrayBuffer(
+        encodedHeader
+      );
+
+    const headerText =
+      new TextDecoder().decode(
+        headerBuffer
+      );
+
+    const header =
+      JSON.parse(headerText) as {
+        alg?: string;
+        typ?: string;
+      };
+
+    /**
+     * Only allow HS256.
+     */
+    if (header.alg !== "HS256") {
+      console.error(
+        "Unsupported JWT algorithm:",
+        header.alg
+      );
+
+      return null;
+    }
+
+    /**
+     * ========================================================
+     * IMPORT SECRET
+     * ========================================================
+     */
+    const secretBytes =
+      new TextEncoder().encode(
+        JWT_SECRET
+      );
+
+    /**
+     * Convert Uint8Array into a guaranteed
+     * standalone ArrayBuffer.
+     */
+    const secretBuffer =
+      new ArrayBuffer(
+        secretBytes.byteLength
+      );
+
+    new Uint8Array(secretBuffer).set(
+      secretBytes
+    );
+
+    const secretKey =
+      await crypto.subtle.importKey(
+        "raw",
+        secretBuffer,
+        {
+          name: "HMAC",
+          hash: "SHA-256",
+        },
+        false,
+        ["verify"]
+      );
+
+    /**
+     * ========================================================
+     * SIGNATURE
+     * ========================================================
+     */
+    const signatureBuffer =
+      base64UrlToArrayBuffer(
+        encodedSignature
+      );
+
+    /**
+     * ========================================================
+     * SIGNED DATA
+     * ========================================================
+     */
+    const signedDataBytes =
+      new TextEncoder().encode(
+        `${encodedHeader}.${encodedPayload}`
+      );
+
+    /**
+     * Again create a guaranteed ArrayBuffer.
+     */
+    const signedDataBuffer =
+      new ArrayBuffer(
+        signedDataBytes.byteLength
+      );
+
+    new Uint8Array(
+      signedDataBuffer
+    ).set(signedDataBytes);
+
+    /**
+     * ========================================================
+     * VERIFY SIGNATURE
+     * ========================================================
+     */
+    const valid =
+      await crypto.subtle.verify(
+        "HMAC",
+        secretKey,
+        signatureBuffer,
+        signedDataBuffer
+      );
+
+    if (!valid) {
+      return null;
+    }
+
+    /**
+     * ========================================================
+     * DECODE PAYLOAD
+     * ========================================================
+     */
+    const payload =
+      decodePayload(token);
+
+    if (!payload) {
+      return null;
+    }
+
+    /**
+     * ========================================================
+     * CHECK EXPIRATION
+     * ========================================================
+     */
     if (
-      decoded.role !== "user" &&
-      decoded.role !== "admin"
+      typeof payload.exp === "number" &&
+      payload.exp * 1000 <= Date.now()
     ) {
       return null;
     }
 
-    return decoded;
+    return payload;
   } catch (error) {
     console.error(
       "JWT verification failed:",
-      error
+      error instanceof Error
+        ? error.message
+        : error
     );
 
     return null;
   }
 }
 
-// ============================================================
-// REDIRECT TO LOGIN
-// ============================================================
-
+/**
+ * ============================================================
+ * REDIRECT TO LOGIN
+ * ============================================================
+ */
 function redirectToLogin(
   req: NextRequest,
   loginPath: string
@@ -67,6 +318,17 @@ function redirectToLogin(
     req.url
   );
 
+  /**
+   * Preserve the original page.
+   *
+   * Example:
+   *
+   * /dashboard/orders
+   *
+   * becomes:
+   *
+   * /login?redirect=/dashboard/orders
+   */
   loginUrl.searchParams.set(
     "redirect",
     req.nextUrl.pathname
@@ -77,23 +339,54 @@ function redirectToLogin(
   );
 }
 
-// ============================================================
-// PROXY
-// ============================================================
+/**
+ * ============================================================
+ * CLEAR AUTH COOKIE
+ * ============================================================
+ */
+function clearCookie(
+  response: NextResponse,
+  cookieName: string
+) {
+  response.cookies.set({
+    name: cookieName,
+    value: "",
+    expires: new Date(0),
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: "strict",
+    secure:
+      process.env.NODE_ENV ===
+      "production",
+    path: "/",
+  });
+}
 
-export function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+/**
+ * ============================================================
+ * PROXY
+ * ============================================================
+ */
+export async function proxy(
+  req: NextRequest
+) {
+  const { pathname } =
+    req.nextUrl;
 
-  // ========================================================
-  // ADMIN ROUTES
-  // ========================================================
-
-  if (pathname.startsWith("/admin")) {
-
-    // ------------------------------------------------------
-    // ADMIN LOGIN IS PUBLIC
-    // ------------------------------------------------------
-
+  /**
+   * ==========================================================
+   * ADMIN ROUTES
+   * ==========================================================
+   */
+  if (
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/")
+  ) {
+    /**
+     * --------------------------------------------------------
+     * ADMIN LOGIN IS PUBLIC
+     * --------------------------------------------------------
+     */
     if (
       pathname === "/admin/login" ||
       pathname === "/admin/login/"
@@ -101,15 +394,21 @@ export function proxy(req: NextRequest) {
       return NextResponse.next();
     }
 
-    // ------------------------------------------------------
-    // ADMIN TOKEN
-    // ------------------------------------------------------
-
+    /**
+     * --------------------------------------------------------
+     * GET ADMIN TOKEN
+     * --------------------------------------------------------
+     */
     const adminToken =
       req.cookies.get(
         "admin-token"
       )?.value;
 
+    /**
+     * --------------------------------------------------------
+     * NO ADMIN TOKEN
+     * --------------------------------------------------------
+     */
     if (!adminToken) {
       return redirectToLogin(
         req,
@@ -117,13 +416,21 @@ export function proxy(req: NextRequest) {
       );
     }
 
-    // ------------------------------------------------------
-    // VERIFY ADMIN TOKEN
-    // ------------------------------------------------------
-
+    /**
+     * --------------------------------------------------------
+     * VERIFY ADMIN TOKEN
+     * --------------------------------------------------------
+     */
     const payload =
-      verifyToken(adminToken);
+      await verifyToken(
+        adminToken
+      );
 
+    /**
+     * --------------------------------------------------------
+     * INVALID TOKEN
+     * --------------------------------------------------------
+     */
     if (!payload) {
       const response =
         redirectToLogin(
@@ -131,21 +438,19 @@ export function proxy(req: NextRequest) {
           "/admin/login"
         );
 
-      response.cookies.set({
-        name: "admin-token",
-        value: "",
-        expires: new Date(0),
-        maxAge: 0,
-        path: "/",
-      });
+      clearCookie(
+        response,
+        "admin-token"
+      );
 
       return response;
     }
 
-    // ------------------------------------------------------
-    // ONLY ADMIN
-    // ------------------------------------------------------
-
+    /**
+     * --------------------------------------------------------
+     * ONLY ADMIN
+     * --------------------------------------------------------
+     */
     if (
       payload.role !== "admin"
     ) {
@@ -157,39 +462,46 @@ export function proxy(req: NextRequest) {
           )
         );
 
-      response.cookies.set({
-        name: "admin-token",
-        value: "",
-        expires: new Date(0),
-        maxAge: 0,
-        path: "/",
-      });
+      clearCookie(
+        response,
+        "admin-token"
+      );
 
       return response;
     }
 
+    /**
+     * --------------------------------------------------------
+     * ADMIN AUTHORIZED
+     * --------------------------------------------------------
+     */
     return NextResponse.next();
   }
 
-  // ========================================================
-  // USER DASHBOARD
-  // ========================================================
-
+  /**
+   * ==========================================================
+   * USER DASHBOARD
+   * ==========================================================
+   */
   if (
-    pathname.startsWith(
-      "/admin"
-    )
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/")
   ) {
-
-    // ------------------------------------------------------
-    // USER TOKEN
-    // ------------------------------------------------------
-
+    /**
+     * --------------------------------------------------------
+     * GET USER TOKEN
+     * --------------------------------------------------------
+     */
     const userToken =
       req.cookies.get(
         "auth-token"
       )?.value;
 
+    /**
+     * --------------------------------------------------------
+     * NO USER TOKEN
+     * --------------------------------------------------------
+     */
     if (!userToken) {
       return redirectToLogin(
         req,
@@ -197,13 +509,21 @@ export function proxy(req: NextRequest) {
       );
     }
 
-    // ------------------------------------------------------
-    // VERIFY USER TOKEN
-    // ------------------------------------------------------
-
+    /**
+     * --------------------------------------------------------
+     * VERIFY USER TOKEN
+     * --------------------------------------------------------
+     */
     const payload =
-      verifyToken(userToken);
+      await verifyToken(
+        userToken
+      );
 
+    /**
+     * --------------------------------------------------------
+     * INVALID USER TOKEN
+     * --------------------------------------------------------
+     */
     if (!payload) {
       const response =
         redirectToLogin(
@@ -211,21 +531,19 @@ export function proxy(req: NextRequest) {
           "/login"
         );
 
-      response.cookies.set({
-        name: "auth-token",
-        value: "",
-        expires: new Date(0),
-        maxAge: 0,
-        path: "/",
-      });
+      clearCookie(
+        response,
+        "auth-token"
+      );
 
       return response;
     }
 
-    // ------------------------------------------------------
-    // ONLY NORMAL USER
-    // ------------------------------------------------------
-
+    /**
+     * --------------------------------------------------------
+     * ADMIN CANNOT USE USER DASHBOARD
+     * --------------------------------------------------------
+     */
     if (
       payload.role !== "user"
     ) {
@@ -237,20 +555,27 @@ export function proxy(req: NextRequest) {
       );
     }
 
+    /**
+     * --------------------------------------------------------
+     * USER AUTHORIZED
+     * --------------------------------------------------------
+     */
     return NextResponse.next();
   }
 
-  // ========================================================
-  // EVERYTHING ELSE
-  // ========================================================
-
+  /**
+   * ==========================================================
+   * PUBLIC ROUTES
+   * ==========================================================
+   */
   return NextResponse.next();
 }
 
-// ============================================================
-// MATCHER
-// ============================================================
-
+/**
+ * ============================================================
+ * MATCHER
+ * ============================================================
+ */
 export const config = {
   matcher: [
     "/admin/:path*",
