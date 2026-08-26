@@ -30,7 +30,11 @@ export type Product = {
   category?: string;
   description?: string;
 
-  [key: string]: unknown;
+  featured?: boolean;
+  status?: "active" | "draft";
+
+  rating?: number;
+  popularityScore?: number;
 };
 
 export type CartProduct = Product & {

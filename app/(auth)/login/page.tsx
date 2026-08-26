@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -20,11 +22,13 @@ type LoginResponse = {
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault();
 
     const cleanEmail = email.trim().toLowerCase();
@@ -54,7 +58,7 @@ export default function LoginPage() {
       setLoading(true);
 
       // ======================================================
-      // NORMAL USER LOGIN
+      // LOGIN API
       // ======================================================
 
       const res = await fetch("/api/auth/login", {
@@ -74,7 +78,7 @@ export default function LoginPage() {
       if (!contentType.includes("application/json")) {
         const text = await res.text();
 
-        console.error("Non-JSON login response:", text);
+        console.error("NON-JSON LOGIN RESPONSE:", text);
 
         throw new Error("Server returned an invalid response.");
       }
@@ -86,7 +90,7 @@ export default function LoginPage() {
       }
 
       // ======================================================
-      // CHECK ROLE
+      // CHECK USER ROLE
       // ======================================================
 
       const role = data.user?.role;
@@ -111,9 +115,8 @@ export default function LoginPage() {
         return;
       }
 
-      // Unknown role
       throw new Error("Invalid account role.");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("LOGIN ERROR:", error);
 
       toast.error(
@@ -127,58 +130,110 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-2 text-center">Login</h1>
+    <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12 dark:bg-slate-950">
+      <section className="w-full max-w-md">
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+          {/* ==================================================
+              HEADER
+          ================================================== */}
 
-        <p className="text-sm text-gray-500 text-center mb-6">
-          Login to your account
-        </p>
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Welcome Back
+            </h1>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          {/* EMAIL */}
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-
-            <Input
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-              disabled={loading}
-            />
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              Login to your Deepak Khira Enterprises account
+            </p>
           </div>
 
-          {/* PASSWORD */}
+          {/* ==================================================
+              LOGIN FORM
+          ================================================== */}
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
+          <form onSubmit={handleLogin} className="space-y-5">
+            {/* EMAIL */}
 
-            <Input
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              disabled={loading}
-            />
-          </div>
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200"
+              >
+                Email Address
+              </label>
 
-          {/* LOGIN */}
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEmail(e.target.value)
+                }
+                autoComplete="email"
+                required
+                disabled={loading}
+                className="w-full"
+              />
+            </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Checking account..." : "Login"}
-          </Button>
-        </form>
+            {/* PASSWORD */}
 
-        <p className="text-xs text-gray-500 text-center mt-5">
-          Your account type will be detected automatically.
-        </p>
-      </div>
-    </div>
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200"
+              >
+                Password
+              </label>
+
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setPassword(e.target.value)
+                }
+                autoComplete="current-password"
+                required
+                disabled={loading}
+                className="w-full"
+              />
+            </div>
+
+            {/* LOGIN BUTTON */}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Checking account..." : "Login"}
+            </Button>
+          </form>
+
+          {/* ==================================================
+              SIGNUP
+          ================================================== */}
+
+          <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            Don't have an account?{" "}
+            <Link
+              href="/signup"
+              className="font-semibold text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400"
+            >
+              Create an account
+            </Link>
+          </p>
+
+          {/* ==================================================
+              ACCOUNT TYPE
+          ================================================== */}
+
+          <p className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
+            Your account type will be detected automatically.
+          </p>
+        </div>
+      </section>
+    </main>
   );
 }

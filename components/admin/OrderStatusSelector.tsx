@@ -3,7 +3,38 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
-const STATUS_ORDER = [
+// ============================================================
+// TYPES
+// ============================================================
+
+type OrderStatus =
+  | "placed"
+  | "confirmed"
+  | "packed"
+  | "shipped"
+  | "delivered"
+  | "cancelled"
+  | "returned";
+
+interface OrderStatusSelectorProps {
+  orderId: string;
+  current?: OrderStatus | string | null;
+  onUpdated?: () => void | Promise<void>;
+}
+
+interface UpdateOrderResponse {
+  success: boolean;
+  message?: string;
+  order?: {
+    status?: OrderStatus | string;
+  };
+}
+
+// ============================================================
+// STATUS CONFIG
+// ============================================================
+
+const STATUS_ORDER: OrderStatus[] = [
   "placed",
   "confirmed",
   "packed",
@@ -13,7 +44,7 @@ const STATUS_ORDER = [
   "returned",
 ];
 
-const STATUS_LABELS = {
+const STATUS_LABELS: Record<OrderStatus, string> = {
   placed: "Placed",
   confirmed: "Confirmed",
   packed: "Packed",
@@ -23,18 +54,52 @@ const STATUS_LABELS = {
   returned: "Returned",
 };
 
-export default function OrderStatusSelector({ orderId, current, onUpdated }) {
-  const [status, setStatus] = useState(current || "placed");
+// ============================================================
+// NORMALIZE STATUS
+// ============================================================
+
+const normalizeStatus = (value: string | null | undefined): OrderStatus => {
+  switch (value) {
+    case "placed":
+    case "confirmed":
+    case "packed":
+    case "shipped":
+    case "delivered":
+    case "cancelled":
+    case "returned":
+      return value;
+
+    default:
+      return "placed";
+  }
+};
+
+// ============================================================
+// COMPONENT
+// ============================================================
+
+export default function OrderStatusSelector({
+  orderId,
+  current,
+  onUpdated,
+}: OrderStatusSelectorProps) {
+  const [status, setStatus] = useState<OrderStatus>(normalizeStatus(current));
 
   const [updating, setUpdating] = useState(false);
 
-  // Keep selector synchronized when
-  // parent/table data changes.
+  // ==========================================================
+  // SYNC WITH PARENT
+  // ==========================================================
+
   useEffect(() => {
-    setStatus(current || "placed");
+    setStatus(normalizeStatus(current));
   }, [current]);
 
-  const updateStatus = async (newStatus) => {
+  // ==========================================================
+  // UPDATE STATUS
+  // ==========================================================
+
+  const updateStatus = async (newStatus: OrderStatus): Promise<void> => {
     // Don't send duplicate request
     if (updating || newStatus === status) {
       return;
@@ -61,45 +126,45 @@ export default function OrderStatusSelector({ orderId, current, onUpdated }) {
         }),
       });
 
-      let data;
+      let data: UpdateOrderResponse;
 
       try {
-        data = await response.json();
+        data = (await response.json()) as UpdateOrderResponse;
       } catch {
         throw new Error("Invalid server response.");
       }
 
-      // ====================================================
+      // ======================================================
       // AUTH ERROR
-      // ====================================================
+      // ======================================================
 
       if (response.status === 401) {
         throw new Error("Admin session expired. Please login again.");
       }
 
-      // ====================================================
+      // ======================================================
       // API ERROR
-      // ====================================================
+      // ======================================================
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Unable to update order status.");
       }
 
-      // ====================================================
+      // ======================================================
       // SUCCESS
-      // ====================================================
+      // ======================================================
 
-      setStatus(data.order?.status || newStatus);
+      const updatedStatus = normalizeStatus(data.order?.status || newStatus);
 
-      toast.success(
-        `Order status updated to ${STATUS_LABELS[newStatus] || newStatus}`
-      );
+      setStatus(updatedStatus);
+
+      toast.success(`Order status updated to ${STATUS_LABELS[updatedStatus]}`);
 
       // Refresh parent table
       if (onUpdated) {
         await onUpdated();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("ORDER STATUS UPDATE ERROR:", error);
 
       // Restore previous value
@@ -115,21 +180,27 @@ export default function OrderStatusSelector({ orderId, current, onUpdated }) {
     }
   };
 
+  // ==========================================================
+  // RENDER
+  // ==========================================================
+
   return (
     <div className="relative">
       <select
         value={status}
         disabled={updating}
-        onChange={(event) => updateStatus(event.target.value)}
+        onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
+          updateStatus(event.target.value as OrderStatus)
+        }
         className={`min-w-[140px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium capitalize text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${
           updating
             ? "cursor-wait opacity-60"
             : "cursor-pointer hover:border-gray-300"
         }`}
       >
-        {STATUS_ORDER.map((item) => (
+        {STATUS_ORDER.map((item: OrderStatus) => (
           <option key={item} value={item}>
-            {STATUS_LABELS[item] || item}
+            {STATUS_LABELS[item]}
           </option>
         ))}
       </select>

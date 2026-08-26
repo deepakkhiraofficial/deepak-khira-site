@@ -1,10 +1,45 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-export default function ProductForm({ product }) {
-  const [form, setForm] = useState({
+// ============================================================
+// TYPES
+// ============================================================
+
+interface Product {
+  _id?: string;
+  name: string;
+  slug: string;
+  description: string;
+  category: string;
+  price: number;
+  stock: number;
+  images?: string[];
+}
+
+interface ProductFormProps {
+  product?: Product | null;
+}
+
+interface ProductFormState {
+  name: string;
+  slug: string;
+  description: string;
+  category: string;
+  price: number;
+  stock: number;
+  images: string[];
+}
+
+// ============================================================
+// COMPONENT
+// ============================================================
+
+export default function ProductForm({ product }: ProductFormProps) {
+  const router = useRouter();
+
+  const [form, setForm] = useState<ProductFormState>({
     name: "",
     slug: "",
     description: "",
@@ -13,90 +48,251 @@ export default function ProductForm({ product }) {
     stock: 0,
     images: [""],
   });
-  const router = useRouter();
+
+  const [saving, setSaving] = useState(false);
+
+  // ==========================================================
+  // LOAD PRODUCT FOR EDIT
+  // ==========================================================
 
   useEffect(() => {
-    if (product) setForm(product);
+    if (!product) {
+      return;
+    }
+
+    setForm({
+      name: product.name || "",
+      slug: product.slug || "",
+      description: product.description || "",
+      category: product.category || "",
+      price: Number(product.price) || 0,
+      stock: Number(product.stock) || 0,
+      images:
+        Array.isArray(product.images) && product.images.length > 0
+          ? product.images
+          : [""],
+    });
   }, [product]);
 
-  const handleChange = (e) => {
+  // ==========================================================
+  // HANDLE INPUT CHANGE
+  // ==========================================================
+
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
-  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const method = product ? "PUT" : "POST";
-    const url = product
-      ? `/api/admin/products/${product._id}`
-      : "/api/admin/products";
+    setForm((prev) => {
+      if (name === "price") {
+        return {
+          ...prev,
+          price: Number(value) || 0,
+        };
+      }
 
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      if (name === "stock") {
+        return {
+          ...prev,
+          stock: Number(value) || 0,
+        };
+      }
+
+      return {
+        ...prev,
+        [name]: value,
+      };
     });
-
-    if (res.ok) router.push("/admin/products");
   };
+
+  // ==========================================================
+  // HANDLE SUBMIT
+  // ==========================================================
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (saving) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const method = product ? "PUT" : "POST";
+
+      const url = product?._id
+        ? `/api/admin/products/${product._id}`
+        : "/api/admin/products";
+
+      const cleanedImages = form.images
+        .map((image) => image.trim())
+        .filter(Boolean);
+
+      const payload = {
+        ...form,
+        price: Number(form.price) || 0,
+        stock: Number(form.stock) || 0,
+        images: cleanedImages,
+      };
+
+      const res = await fetch(url, {
+        method,
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        credentials: "include",
+
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        let message = "Unable to save product.";
+
+        try {
+          const data = await res.json();
+
+          if (data?.message) {
+            message = data.message;
+          }
+        } catch {
+          // Ignore invalid JSON response
+        }
+
+        throw new Error(message);
+      }
+
+      router.push("/admin/products");
+      router.refresh();
+    } catch (error: unknown) {
+      console.error("PRODUCT FORM ERROR:", error);
+
+      alert(error instanceof Error ? error.message : "Unable to save product.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
+    <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
+      {/* PRODUCT NAME */}
+
       <input
         type="text"
         name="name"
         value={form.name}
         onChange={handleChange}
         placeholder="Product Name"
-        className="w-full p-2 border rounded"
+        className="w-full rounded border p-2"
         required
+        disabled={saving}
       />
+
+      {/* SLUG */}
+
       <input
         type="text"
         name="slug"
         value={form.slug}
         onChange={handleChange}
         placeholder="Slug (unique)"
-        className="w-full p-2 border rounded"
+        className="w-full rounded border p-2"
         required
+        disabled={saving}
       />
+
+      {/* DESCRIPTION */}
+
       <textarea
         name="description"
         value={form.description}
         onChange={handleChange}
         placeholder="Description"
-        className="w-full p-2 border rounded"
+        className="w-full rounded border p-2"
+        rows={5}
         required
+        disabled={saving}
       />
+
+      {/* CATEGORY */}
+
       <input
         type="text"
         name="category"
         value={form.category}
         onChange={handleChange}
         placeholder="Category"
-        className="w-full p-2 border rounded"
+        className="w-full rounded border p-2"
         required
+        disabled={saving}
       />
+
+      {/* PRICE */}
+
       <input
         type="number"
         name="price"
         value={form.price}
         onChange={handleChange}
         placeholder="Price"
-        className="w-full p-2 border rounded"
+        className="w-full rounded border p-2"
+        min="0"
+        step="0.01"
         required
+        disabled={saving}
       />
+
+      {/* STOCK */}
+
       <input
         type="number"
         name="stock"
         value={form.stock}
         onChange={handleChange}
         placeholder="Stock"
-        className="w-full p-2 border rounded"
+        className="w-full rounded border p-2"
+        min="0"
+        step="1"
         required
+        disabled={saving}
       />
-      <button className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-        {product ? "Update" : "Add"} Product
+
+      {/* IMAGE URL */}
+
+      <input
+        type="url"
+        value={form.images[0] || ""}
+        onChange={(e) =>
+          setForm((prev) => ({
+            ...prev,
+            images: [e.target.value],
+          }))
+        }
+        placeholder="Product Image URL"
+        className="w-full rounded border p-2"
+        disabled={saving}
+      />
+
+      {/* SUBMIT */}
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="rounded bg-green-600 px-4 py-2 text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {saving
+          ? product
+            ? "Updating..."
+            : "Adding..."
+          : product
+            ? "Update Product"
+            : "Add Product"}
       </button>
     </form>
   );

@@ -12,8 +12,7 @@ export const dynamic = "force-dynamic";
 type SortDirection = 1 | -1;
 
 type ProductQuery = {
-  status?: "active" | "draft";
-
+  status: "active" | "draft";
   featured?: boolean;
 
   $or?: Array<Record<string, unknown>>;
@@ -31,7 +30,7 @@ type ProductQuery = {
     $gte: number;
   };
 
-  $expr?: Record<string, unknown>;
+  inStock?: boolean;
 };
 
 // ============================================================
@@ -58,7 +57,7 @@ const DEFAULT_LIMIT = 12;
 function parseNonNegativeNumber(
   value: string | null
 ): number | undefined {
-  if (value === null || value.trim() === "") {
+  if (!value || value.trim() === "") {
     return undefined;
   }
 
@@ -75,7 +74,7 @@ function parsePositiveInteger(
   value: string | null,
   fallback: number
 ): number {
-  if (value === null || value.trim() === "") {
+  if (!value || value.trim() === "") {
     return fallback;
   }
 
@@ -102,16 +101,11 @@ function escapeRegex(value: string): string {
 
 export async function GET(req: Request) {
   try {
-    await connectDB();
-
     const { searchParams } = new URL(req.url);
 
     // ========================================================
-    // BASIC PARAMETERS
+    // PAGINATION
     // ========================================================
-
-    const search =
-      searchParams.get("search")?.trim() || "";
 
     const page = parsePositiveInteger(
       searchParams.get("page"),
@@ -131,16 +125,11 @@ export async function GET(req: Request) {
     const skip = (page - 1) * limit;
 
     // ========================================================
-    // STATUS
+    // SEARCH
     // ========================================================
 
-    const statusParam =
-      searchParams.get("status");
-
-    const status =
-      statusParam === "draft"
-        ? "draft"
-        : "active";
+    const search =
+      searchParams.get("search")?.trim() || "";
 
     // ========================================================
     // FEATURED
@@ -160,7 +149,6 @@ export async function GET(req: Request) {
         .map((category) => category.trim())
         .filter(Boolean) || [];
 
-    // Also support singular category
     const singleCategory =
       searchParams
         .get("category")
@@ -211,19 +199,21 @@ export async function GET(req: Request) {
     // STOCK
     // ========================================================
 
-    const inStock =
+    const inStockParam =
       searchParams.get("inStock");
 
     // ========================================================
     // QUERY
     // ========================================================
 
+    // IMPORTANT:
+    // Public API ONLY returns ACTIVE products.
     const query: ProductQuery = {
-      status,
+      status: "active",
     };
 
     // ========================================================
-    // FEATURED FILTER
+    // FEATURED
     // ========================================================
 
     if (featuredParam === "true") {
@@ -271,23 +261,22 @@ export async function GET(req: Request) {
     }
 
     // ========================================================
-    // CATEGORY FILTER
+    // CATEGORY
     // ========================================================
 
     if (categories.length > 0) {
-      if (categories.length === 1) {
-        query.category = categories[0];
-      } else {
-        query.category = {
-          $in: categories,
-        };
-      }
+      query.category =
+        categories.length === 1
+          ? categories[0]
+          : {
+              $in: categories,
+            };
     } else if (singleCategory) {
       query.category = singleCategory;
     }
 
     // ========================================================
-    // PRICE FILTER
+    // PRICE
     // ========================================================
 
     if (
@@ -306,7 +295,7 @@ export async function GET(req: Request) {
     }
 
     // ========================================================
-    // RATING FILTER
+    // RATING
     // ========================================================
 
     if (minRating !== undefined) {
@@ -316,34 +305,15 @@ export async function GET(req: Request) {
     }
 
     // ========================================================
-    // STOCK FILTER
+    // STOCK
     // ========================================================
 
-    if (inStock === "true") {
-      query.$and = [
-        {
-          $or: [
-            {
-              inStock: true,
-            },
-            {
-              stock: {
-                $gt: 0,
-              },
-            },
-          ],
-        },
-      ];
+    if (inStockParam === "true") {
+      query.inStock = true;
     }
 
-    if (inStock === "false") {
-      query.$and = [
-        {
-          stock: {
-            $lte: 0,
-          },
-        },
-      ];
+    if (inStockParam === "false") {
+      query.inStock = false;
     }
 
     // ========================================================
@@ -394,6 +364,8 @@ export async function GET(req: Request) {
     // DATABASE
     // ========================================================
 
+    await connectDB();
+
     const [total, products] =
       await Promise.all([
         Product.countDocuments(query),
@@ -402,7 +374,9 @@ export async function GET(req: Request) {
           .sort(sortQuery)
           .skip(skip)
           .limit(limit)
-          .select("-__v")
+          .select(
+            "_id name slug description category price stock inStock images featured status rating popularityScore createdAt updatedAt"
+          )
           .lean(),
       ]);
 
@@ -411,9 +385,9 @@ export async function GET(req: Request) {
     // ========================================================
 
     const totalPages =
-      total === 0
-        ? 0
-        : Math.ceil(total / limit);
+      total > 0
+        ? Math.ceil(total / limit)
+        : 0;
 
     // ========================================================
     // RESPONSE
@@ -439,11 +413,16 @@ export async function GET(req: Request) {
         },
 
         // Backward compatibility
-        // for components that may
-        // still read totalPages directly.
         totalPages,
       },
-      { status: 200 }
+      {
+        status: 200,
+
+        headers: {
+          "Cache-Control":
+            "public, s-maxage=60, stale-while-revalidate=300",
+        },
+      }
     );
   } catch (error) {
     console.error(
@@ -454,9 +433,12 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         success: false,
+
         message:
           "Unable to load products. Please try again later.",
+
         products: [],
+
         pagination: {
           total: 0,
           page: 1,
@@ -466,7 +448,9 @@ export async function GET(req: Request) {
           hasPreviousPage: false,
         },
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
@@ -478,10 +462,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    // ========================================================
-    // ADMIN AUTHORIZATION
-    // ========================================================
-
     const admin = await requireAdmin();
 
     if (!admin) {
@@ -491,19 +471,13 @@ export async function POST(req: Request) {
           message:
             "Admin authorization required.",
         },
-        { status: 401 }
+        {
+          status: 401,
+        }
       );
     }
 
-    // ========================================================
-    // DATABASE
-    // ========================================================
-
     await connectDB();
-
-    // ========================================================
-    // BODY
-    // ========================================================
 
     const body = await req.json();
 
@@ -521,7 +495,7 @@ export async function POST(req: Request) {
     } = body;
 
     // ========================================================
-    // VALIDATION
+    // BASIC VALIDATION
     // ========================================================
 
     if (
@@ -612,17 +586,18 @@ export async function POST(req: Request) {
     // IMAGES
     // ========================================================
 
-    const productImages = Array.isArray(
-      images
-    )
-      ? images
-          .filter(
-            (image): image is string =>
-              typeof image === "string" &&
-              image.trim().length > 0
-          )
-          .map((image) => image.trim())
-      : [];
+    const productImages =
+      Array.isArray(images)
+        ? images
+            .filter(
+              (image): image is string =>
+                typeof image === "string" &&
+                image.trim().length > 0
+            )
+            .map((image) =>
+              image.trim()
+            )
+        : [];
 
     // ========================================================
     // STATUS
@@ -644,10 +619,18 @@ export async function POST(req: Request) {
     // RATING
     // ========================================================
 
+    const ratingNumber =
+      Number(rating);
+
     const productRating =
-      Number.isFinite(Number(rating))
+      Number.isFinite(
+        ratingNumber
+      )
         ? Math.min(
-            Math.max(Number(rating), 0),
+            Math.max(
+              ratingNumber,
+              0
+            ),
             5
           )
         : 0;
@@ -656,18 +639,21 @@ export async function POST(req: Request) {
     // POPULARITY
     // ========================================================
 
+    const popularityNumber =
+      Number(popularityScore);
+
     const productPopularity =
       Number.isFinite(
-        Number(popularityScore)
+        popularityNumber
       )
         ? Math.max(
-            Number(popularityScore),
+            popularityNumber,
             0
           )
         : 0;
 
     // ========================================================
-    // CREATE
+    // CREATE PRODUCT
     // ========================================================
 
     const product =
@@ -703,18 +689,18 @@ export async function POST(req: Request) {
           productPopularity,
       });
 
-    // ========================================================
-    // RESPONSE
-    // ========================================================
-
     return NextResponse.json(
       {
         success: true,
+
         message:
           "Product created successfully.",
+
         product,
       },
-      { status: 201 }
+      {
+        status: 201,
+      }
     );
   } catch (error: any) {
     console.error(
@@ -726,14 +712,18 @@ export async function POST(req: Request) {
     // DUPLICATE
     // ========================================================
 
-    if (error?.code === 11000) {
+    if (
+      error?.code === 11000
+    ) {
       return NextResponse.json(
         {
           success: false,
           message:
             "A product with the same slug already exists.",
         },
-        { status: 409 }
+        {
+          status: 409,
+        }
       );
     }
 
@@ -756,11 +746,14 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
+
           message:
             messages.join(", ") ||
             "Product validation failed.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -771,11 +764,14 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: false,
+
         message:
           error?.message ||
           "Failed to create product.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

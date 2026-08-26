@@ -1,12 +1,13 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGO_URI;
+const mongoUri = process.env.MONGO_URI;
 
-if (!MONGODB_URI) {
-  throw new Error(
-    "MONGO_URI is missing in .env.local"
-  );
+if (!mongoUri) {
+  throw new Error("MONGO_URI is missing in .env.local");
 }
+
+// After the check above, this value is guaranteed to be a string.
+const MONGODB_URI: string = mongoUri;
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -15,9 +16,7 @@ interface MongooseCache {
 
 declare global {
   // eslint-disable-next-line no-var
-  var mongooseCache:
-    | MongooseCache
-    | undefined;
+  var mongooseCache: MongooseCache | undefined;
 }
 
 const cached: MongooseCache =
@@ -28,9 +27,7 @@ const cached: MongooseCache =
 
 global.mongooseCache = cached;
 
-async function connectDB(): Promise<
-  typeof mongoose
-> {
+async function connectDB(): Promise<typeof mongoose> {
   // Already connected
   if (cached.conn) {
     return cached.conn;
@@ -46,9 +43,7 @@ async function connectDB(): Promise<
         minPoolSize: 0,
       })
       .then((mongooseInstance) => {
-        console.log(
-          "MongoDB connected successfully"
-        );
+        console.log("MongoDB connected successfully");
 
         return mongooseInstance;
       })
@@ -58,17 +53,14 @@ async function connectDB(): Promise<
 
         console.error(
           "MongoDB connection failed:",
-          error instanceof Error
-            ? error.message
-            : error
+          error instanceof Error ? error.message : error
         );
 
         throw error;
       });
   }
 
-  cached.conn =
-    await cached.promise;
+  cached.conn = await cached.promise;
 
   return cached.conn;
 }

@@ -3,59 +3,124 @@ import twilio from "twilio";
 
 export async function POST(req) {
   try {
+    // ============================================================
+    // READ WHATSAPP WEBHOOK DATA
+    // ============================================================
+
     const data = await req.formData();
+
     const incomingMessage = data.get("Body");
     const from = data.get("From");
 
     console.log("New WhatsApp message:", incomingMessage);
+    console.log("WhatsApp sender:", from);
 
-    const client = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
+    // ============================================================
+    // VALIDATE ENVIRONMENT VARIABLES
+    // ============================================================
 
-    // ------------ AUTO REPLY MESSAGE ------------
+    const {
+      TWILIO_ACCOUNT_SID,
+      TWILIO_AUTH_TOKEN,
+      WHATSAPP_NUMBER,
+      OWNER_WHATSAPP,
+    } = process.env;
+
+    if (
+      !TWILIO_ACCOUNT_SID ||
+      !TWILIO_AUTH_TOKEN ||
+      !WHATSAPP_NUMBER ||
+      !OWNER_WHATSAPP
+    ) {
+      console.error(
+        "WhatsApp configuration is missing. Check Twilio environment variables."
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "WhatsApp service is not configured.",
+        },
+        { status: 500 }
+      );
+    }
+
+    // ============================================================
+    // VALIDATE INCOMING MESSAGE
+    // ============================================================
+
+    if (!from || !incomingMessage) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid WhatsApp webhook data.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ============================================================
+    // TWILIO CLIENT
+    // ============================================================
+
+    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+    // ============================================================
+    // AUTO REPLY TO CUSTOMER
+    // ============================================================
+
     const reply = await client.messages.create({
-      from: process.env.WHATSAPP_NUMBER,
+      from: WHATSAPP_NUMBER,
       to: from,
-      body: `
-Hello 👋
+      body: `Hello 👋
 
 Thanks for contacting *Deepak Khira Enterprises*.
 
 We received your message:
+
 "${incomingMessage}"
 
-💠 Our team will reply shortly.  
-💠 For urgent support, call: +91 9109001109  
+💠 Our team will reply shortly.
+💠 For urgent support, call: +91 9109001109
 💠 Email: deepakkhushwah475110@gmail.com
 
-Regards,  
-*Deepak Khira Enterprises*
-      `,
+Regards,
+*Deepak Khira Enterprises*`,
     });
 
-    // ------------ NOTIFY OWNER ------------
+    // ============================================================
+    // NOTIFY OWNER
+    // ============================================================
+
     await client.messages.create({
-      from: process.env.WHATSAPP_NUMBER,
-      to: process.env.OWNER_WHATSAPP,
-      body: `
-📩 *New WhatsApp Inquiry Received*
+      from: WHATSAPP_NUMBER,
+      to: OWNER_WHATSAPP,
+      body: `📩 *New WhatsApp Inquiry Received*
 
 From: ${from}
-Message: ${incomingMessage}
-      `,
+
+Message:
+${incomingMessage}`,
     });
 
-    return NextResponse.json({ success: true, messageId: reply.sid });
+    // ============================================================
+    // SUCCESS RESPONSE
+    // ============================================================
+
+    return NextResponse.json({
+      success: true,
+      message: "WhatsApp message processed successfully.",
+      messageId: reply.sid,
+    });
   } catch (error) {
     console.error("WhatsApp Error:", error);
-    return NextResponse.json({ error: "WhatsApp Auto-Reply Failed" });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "WhatsApp Auto-Reply Failed",
+      },
+      { status: 500 }
+    );
   }
 }
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};

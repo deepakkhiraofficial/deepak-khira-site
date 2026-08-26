@@ -108,7 +108,7 @@ export default function BlogPostPage() {
     );
   }
 
-  const postUrl = `https://deepak-khira-enterprises.com/blogs/${post.slug}`;
+  const postUrl = `https://deepakkhiraenterprises.netlify.app/blogs/${post.slug}`;
 
   return (
     <>
@@ -123,7 +123,7 @@ export default function BlogPostPage() {
           "@type": "BlogPosting",
           headline: post.title,
           image: post.image
-            ? `https://deepak-khira-enterprises.com${post.image}`
+            ? `https://deepakkhiraenterprises.netlify.app${post.image}`
             : undefined,
           author: { "@type": "Person", name: post.author },
           datePublished: post.createdAt,

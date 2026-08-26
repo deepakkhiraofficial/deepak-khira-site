@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+// import type { Metadata } from "next";
 import {
     RefreshCcw,
     XCircle,
@@ -8,7 +8,7 @@ import {
     FileCheck2,
 } from "lucide-react";
 
-export const metadata: Metadata = {
+export const  Metadata = {
     title: "Refund & Cancellation Policy | Deepak Khira Enterprises",
     description:
         "Read the refund and cancellation policy of Deepak Khira Enterprises for products, digital services and service orders.",

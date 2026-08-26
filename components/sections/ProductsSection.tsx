@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, ShoppingCart, Star, PackageOpen } from "lucide-react";
 
-import { useCart } from "@/components/cart/CartContext";
+import { useCart, Product as CartProduct } from "@/components/cart/CartContext";
 
 type Product = {
   _id: string;
@@ -18,7 +18,7 @@ type Product = {
   inStock?: boolean;
   images?: string[];
   featured?: boolean;
-  status?: string;
+  status?: "active" | "draft";
   rating?: number;
 };
 
@@ -118,7 +118,7 @@ export default function ProductsSection() {
       return;
     }
 
-    addToCart(product, 1);
+    addToCart(product as CartProduct, 1);
   }
 
   return (

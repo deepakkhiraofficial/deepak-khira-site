@@ -12,13 +12,15 @@ interface Author {
 
 interface Post {
   _id: string;
+  id?: string;
   title: string;
   slug: string;
   excerpt: string;
-  image: string;
-  author: Author;
-  date: string;
-  views: number;
+  image?: string;
+  author: Author | string;
+  date?: string;
+  createdAt?: string;
+  views?: number;
 }
 
 interface BlogResponse {
@@ -130,7 +132,18 @@ export default function BlogList() {
             transition={{ duration: 0.4 }}
           >
             <Link href={`/blogs/${post.slug}`}>
-              <PostCard post={post} />
+              <PostCard
+                post={{
+                  id: post.id || post._id,
+                  title: post.title,
+                  slug: post.slug,
+                  excerpt: post.excerpt,
+                  image: post.image,
+                  author: post.author,
+                  date: post.date,
+                  createdAt: post.createdAt,
+                }}
+              />
             </Link>
           </motion.div>
         ))}

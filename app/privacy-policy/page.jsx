@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+// import type { Metadata } from "next";
 import {
     ShieldCheck,
     UserRound,
@@ -13,7 +13,7 @@ import {
     Info,
 } from "lucide-react";
 
-export const metadata: Metadata = {
+export const  Metadata = {
     title: "Privacy Policy | Deepak Khira Enterprises",
 
     description:

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ProductType } from "./types"; // optional separate type file
+import { ProductType } from "@/components/admin/ProductTable";
 import { FaEdit, FaTrash } from "react-icons/fa";
 
 type Props = {
@@ -19,10 +19,11 @@ export default function ProductList({
   onEdit,
   onDelete,
 }: Props) {
-  if (!products?.length)
+  if (!products?.length) {
     return (
       <p className="text-gray-500 text-center py-10">No products found.</p>
     );
+  }
 
   const allSelected = selectedIds.length === products.length;
 
@@ -40,6 +41,7 @@ export default function ProductList({
                 }
               />
             </th>
+
             <th className="p-3 border-b text-left">Name</th>
             <th className="p-3 border-b text-left">Category</th>
             <th className="p-3 border-b text-left">Price</th>
@@ -47,6 +49,7 @@ export default function ProductList({
             <th className="p-3 border-b text-left">Actions</th>
           </tr>
         </thead>
+
         <tbody>
           {products.map((p, idx) => (
             <tr
@@ -62,24 +65,34 @@ export default function ProductList({
                   onChange={() => toggleSelect(p._id)}
                 />
               </td>
+
               <td className="p-3 border-b font-medium">{p.name}</td>
+
               <td className="p-3 border-b">{p.category || "—"}</td>
+
               <td className="p-3 border-b">
                 ₹{p.price.toLocaleString("en-IN")}
               </td>
+
               <td className="p-3 border-b">{p.stock ?? 0}</td>
+
               <td className="p-3 border-b flex items-center gap-2">
                 <button
+                  type="button"
                   className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
                   onClick={() => onEdit(p)}
                 >
-                  <FaEdit /> Edit
+                  <FaEdit />
+                  Edit
                 </button>
+
                 <button
+                  type="button"
                   className="flex items-center gap-1 text-red-600 hover:text-red-800"
                   onClick={() => onDelete(p._id)}
                 >
-                  <FaTrash /> Delete
+                  <FaTrash />
+                  Delete
                 </button>
               </td>
             </tr>

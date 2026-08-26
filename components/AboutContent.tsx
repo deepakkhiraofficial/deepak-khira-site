@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Script from "next/script";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function AboutContent() {
   // Animation Variants
@@ -220,13 +221,12 @@ export default function AboutContent() {
             Whether it&apos;s a business website, admin system, or complete web
             application — we can build it.
           </p>
-          <a
+          <Link
             href="/contact"
-            prefetch
             className="px-8 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-lg transition"
           >
             Contact Us
-          </a>
+          </Link>
         </motion.div>
       </div>
     </section>

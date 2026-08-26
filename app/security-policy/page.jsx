@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+// import type { Metadata } from "next";
 import {
     ShieldCheck,
     AlertTriangle,
@@ -8,7 +8,7 @@ import {
     LockKeyhole,
 } from "lucide-react";
 
-export const metadata: Metadata = {
+export const  Metadata = {
     title: "Security Policy | Deepak Khira Enterprises",
     description:
         "Learn about the security commitment of Deepak Khira Enterprises and how to responsibly report security vulnerabilities.",

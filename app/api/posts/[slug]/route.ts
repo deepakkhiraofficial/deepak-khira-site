@@ -1,16 +1,69 @@
-import connectDB from '@/lib/mongodb';
-import Post from '@/models/Post';
-import { NextResponse } from 'next/server';
+import connectDB from "@/lib/mongodb";
+import Post from "@/models/Post";
+import { NextResponse } from "next/server";
 
-export async function GET(req: Request, { params }: { params: { slug: string } }) {
-  await connectDB();
+interface RouteContext {
+  params: Promise<{
+    slug: string;
+  }>;
+}
 
-  const post = await Post.findOne({ slug: params.slug });
-  if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+export async function GET(
+  _req: Request,
+  { params }: RouteContext
+) {
+  try {
+    await connectDB();
 
-  // Increase view count
-  post.views = (post.views || 0) + 1;
-  await post.save();
+    const { slug } = await params;
 
-  return NextResponse.json(post);
+    const cleanSlug = slug?.trim();
+
+    if (!cleanSlug) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Post slug is required.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const post = await Post.findOne({
+      slug: cleanSlug,
+    });
+
+    if (!post) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Post not found.",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Increase view count
+    post.views = (post.views || 0) + 1;
+
+    await post.save();
+
+    return NextResponse.json(
+      {
+        success: true,
+        post,
+      },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    console.error("GET POST BY SLUG ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Unable to fetch post.",
+      },
+      { status: 500 }
+    );
+  }
 }

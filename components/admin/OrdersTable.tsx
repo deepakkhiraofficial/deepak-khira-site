@@ -1,28 +1,81 @@
 "use client";
 
 import Link from "next/link";
-import React from "react";
 import OrderStatusSelector from "./OrderStatusSelector";
 
-const formatCurrency = (value) => {
-  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+type OrderStatus =
+  | "placed"
+  | "confirmed"
+  | "packed"
+  | "shipped"
+  | "delivered"
+  | "cancelled"
+  | "returned";
+
+interface OrderUser {
+  name?: string | null;
+  email?: string | null;
+}
+
+interface OrderPayment {
+  method?: string | null;
+  paid?: boolean | null;
+}
+
+interface OrderItem {
+  _id?: string;
+  product?: unknown;
+  quantity?: number;
+}
+
+interface Order {
+  _id: string;
+  status?: OrderStatus | string | null;
+  user?: OrderUser | null;
+  items?: OrderItem[] | null;
+  totalPrice?: number | null;
+  payment?: OrderPayment | null;
+  createdAt?: string | Date | null;
+}
+
+interface OrdersTableProps {
+  orders: Order[];
+  onReload: () => void | Promise<void>;
+}
+
+// ============================================================
+// CURRENCY
+// ============================================================
+
+const formatCurrency = (value: number | null | undefined): string => {
+  return `₹${Number(value ?? 0).toLocaleString("en-IN")}`;
 };
 
-const formatDate = (value) => {
+// ============================================================
+// DATE
+// ============================================================
+
+const formatDate = (value: string | Date | null | undefined): string => {
   if (!value) return "—";
 
-  try {
-    return new Date(value).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
     return "—";
   }
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
 
-const statusStyles = {
+// ============================================================
+// STATUS STYLES
+// ============================================================
+
+const statusStyles: Record<OrderStatus, string> = {
   placed: "bg-blue-50 text-blue-700 ring-blue-600/20",
 
   confirmed: "bg-indigo-50 text-indigo-700 ring-indigo-600/20",
@@ -38,10 +91,42 @@ const statusStyles = {
   returned: "bg-orange-50 text-orange-700 ring-orange-600/20",
 };
 
-export default function OrdersTable({ orders, onReload }) {
+// ============================================================
+// NORMALIZE STATUS
+// ============================================================
+
+const normalizeStatus = (value: string | null | undefined): OrderStatus => {
+  switch (value) {
+    case "placed":
+    case "confirmed":
+    case "packed":
+    case "shipped":
+    case "delivered":
+    case "cancelled":
+    case "returned":
+      return value;
+
+    default:
+      return "placed";
+  }
+};
+
+// ============================================================
+// COMPONENT
+// ============================================================
+
+export default function OrdersTable({ orders, onReload }: OrdersTableProps) {
+  // ==========================================================
+  // INVALID DATA
+  // ==========================================================
+
   if (!Array.isArray(orders)) {
     return null;
   }
+
+  // ==========================================================
+  // EMPTY STATE
+  // ==========================================================
 
   if (orders.length === 0) {
     return (
@@ -55,9 +140,15 @@ export default function OrdersTable({ orders, onReload }) {
     );
   }
 
+  // ==========================================================
+  // TABLE
+  // ==========================================================
+
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      {/* Desktop table */}
+      {/* ======================================================
+          DESKTOP TABLE
+      ======================================================= */}
 
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full min-w-[1050px]">
@@ -99,11 +190,9 @@ export default function OrdersTable({ orders, onReload }) {
 
           <tbody className="divide-y divide-gray-100">
             {orders.map((order) => {
-              const status = order.status || "placed";
+              const status = normalizeStatus(order.status);
 
-              const statusClass =
-                statusStyles[status] ||
-                "bg-gray-50 text-gray-700 ring-gray-600/20";
+              const statusClass = statusStyles[status];
 
               const itemCount = Array.isArray(order.items)
                 ? order.items.length
@@ -226,19 +315,22 @@ export default function OrdersTable({ orders, onReload }) {
         </table>
       </div>
 
-      {/* Mobile cards */}
+      {/* ======================================================
+          MOBILE CARDS
+      ======================================================= */}
 
       <div className="divide-y divide-gray-100 lg:hidden">
         {orders.map((order) => {
-          const status = order.status || "placed";
+          const status = normalizeStatus(order.status);
 
-          const statusClass =
-            statusStyles[status] || "bg-gray-50 text-gray-700 ring-gray-600/20";
+          const statusClass = statusStyles[status];
 
           const itemCount = Array.isArray(order.items) ? order.items.length : 0;
 
           return (
             <div key={order._id} className="space-y-4 p-5">
+              {/* HEADER */}
+
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <Link
@@ -260,6 +352,8 @@ export default function OrdersTable({ orders, onReload }) {
                 </span>
               </div>
 
+              {/* CUSTOMER */}
+
               <div>
                 <p className="font-medium text-gray-900">
                   {order.user?.name || "Guest"}
@@ -269,6 +363,8 @@ export default function OrdersTable({ orders, onReload }) {
                   {order.user?.email || "—"}
                 </p>
               </div>
+
+              {/* ORDER SUMMARY */}
 
               <div className="grid grid-cols-2 gap-4 rounded-xl bg-gray-50 p-4">
                 <div>
@@ -302,11 +398,15 @@ export default function OrdersTable({ orders, onReload }) {
                 </div>
               </div>
 
+              {/* STATUS SELECTOR */}
+
               <OrderStatusSelector
                 orderId={order._id}
                 current={status}
                 onUpdated={onReload}
               />
+
+              {/* ACTIONS */}
 
               <div className="flex gap-2">
                 <Link

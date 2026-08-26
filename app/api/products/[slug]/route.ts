@@ -9,28 +9,36 @@ type Context = {
 };
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: Context
 ) {
   try {
-    await connectDB();
-
     const { slug } = await params;
 
-    if (!slug?.trim()) {
+    const normalizedSlug = slug?.trim().toLowerCase();
+
+    if (!normalizedSlug) {
       return NextResponse.json(
         {
           success: false,
           message: "Product slug is required.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
+    await connectDB();
+
     const product = await Product.findOne({
-      slug: slug.trim().toLowerCase(),
+      slug: normalizedSlug,
       status: "active",
-    }).select("-__v");
+    })
+      .select(
+        "_id name slug description category price stock inStock images featured status rating popularityScore createdAt updatedAt"
+      )
+      .lean();
 
     if (!product) {
       return NextResponse.json(
@@ -38,7 +46,9 @@ export async function GET(
           success: false,
           message: "Product not found.",
         },
-        { status: 404 }
+        {
+          status: 404,
+        }
       );
     }
 
@@ -47,9 +57,15 @@ export async function GET(
         success: true,
         product,
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          "Cache-Control":
+            "public, s-maxage=300, stale-while-revalidate=600",
+        },
+      }
     );
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("GET PRODUCT ERROR:", error);
 
     return NextResponse.json(
@@ -57,7 +73,9 @@ export async function GET(
         success: false,
         message: "Unable to fetch product.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
