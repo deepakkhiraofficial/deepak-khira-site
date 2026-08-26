@@ -1,41 +1,43 @@
-"use client";
+import ProductDetail from "./ProductDetail";
 
-import React, { useState } from "react";
-import Image from "next/image";
-
-interface ProductPageProps {
-  params?: {
-    slug?: string;
-  };
+interface PageProps {
+  params: Promise<{
+    slug: string;
+  }>;
 }
 
-export default function ProductPage({ params }: ProductPageProps) {
-  const slug = params?.slug ?? "unknown-product";
-  const [imgSrc, setImgSrc] = useState(`/images/products/${slug}.webp`);
+export default async function Page({ params }: PageProps) {
+  const { slug } = await params;
 
-  return (
-    <section className="container mx-auto px-4 py-20">
-      <h1 className="text-4xl font-bold mb-6">
-        {slug.replace(/-/g, " ") || "Unknown Product"}
-      </h1>
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-      <div className="w-full max-w-md mx-auto">
-        <Image
-          src={imgSrc}
-          alt={slug}
-          width={500}
-          height={500}
-          className="rounded-lg shadow-md"
-          onError={() => setImgSrc("/images/products/placeholder.webp")}
-          priority
-        />
+  try {
+    const res = await fetch(`${apiUrl}/api/products/${slug}`, {
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      return (
+        <div className="py-20 text-center text-red-500">Product not found!</div>
+      );
+    }
+
+    const data = await res.json();
+
+    if (!data.success || !data.product) {
+      return (
+        <div className="py-20 text-center text-red-500">Product not found!</div>
+      );
+    }
+
+    return <ProductDetail product={data.product} />;
+  } catch (error) {
+    console.error("PRODUCT PAGE ERROR:", error);
+
+    return (
+      <div className="py-20 text-center text-red-500">
+        Failed to load product.
       </div>
-
-      <p className="mt-6 text-gray-700 dark:text-gray-300 text-lg text-center">
-        {slug !== "unknown-product"
-          ? `Detailed information about ${slug.replace(/-/g, " ")} will be available soon.`
-          : "Product information is not available."}
-      </p>
-    </section>
-  );
+    );
+  }
 }

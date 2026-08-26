@@ -1,5 +1,10 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
+
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
@@ -13,6 +18,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "outDir": "dist",
     "plugins": [
       {
         "name": "next"
@@ -28,7 +34,14 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
-  ],
+    "**/*.mts",
+    "workers/**/*",
+    "src/**/*",
+    "app/admin/login/page.jsx",
+    "app/admin/page.jsx",
+    "app/api/cart/route.js",
+    "app/api/cart/get/route.js",
+    "app/admin/s"
+, "next.config.js", "components/admin/Sidebar.jsx"  ],
   "exclude": ["node_modules"]
 }

@@ -1,5 +1,5 @@
 export default function sitemap() {
-    const baseUrl = "https://your-domain.com";
+    const baseUrl = "http://localhost:3000/";
   
     return [
       {

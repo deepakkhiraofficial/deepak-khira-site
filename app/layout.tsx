@@ -1,153 +1,209 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { Providers } from "./providers";
+
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { ToastContainer } from "react-toastify";
+import { CartProvider } from "@/components/cart/CartContext";
+import { Toaster } from "react-hot-toast";
+
 import "react-toastify/dist/ReactToastify.css";
 
-const inter = Inter({ subsets: ["latin"] });
+// ============================================================
+// FONT
+// ============================================================
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+// ============================================================
+// SITE CONFIG
+// ============================================================
+
+const SITE_URL = "https://deepak-khira-enterprises.in";
+
+const SITE_NAME = "Deepak Khira Enterprises";
+
+const SITE_DESCRIPTION =
+  "Deepak Khira Enterprises provides online products, digital services, web development, branding, and business solutions for customers and businesses.";
+
+// ============================================================
+// METADATA
+// ============================================================
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+
   title: {
-    default: "Deepak Khira Enterprises",
-    template: "%s | Deepak Khira Enterprises",
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "Trusted Online Seller, Professional business & digital services — web development, mobile apps, UI/UX, branding, and more.",
+
+  description: SITE_DESCRIPTION,
+
+  applicationName: SITE_NAME,
+
   keywords: [
+    "Deepak Khira Enterprises",
     "Deepak Khira",
-    "Deepak Kushwah",
+    "online seller India",
+    "e-commerce India",
+    "digital services",
     "web development",
-    "UI UX",
+    "website development",
+    "branding services",
     "business solutions",
-    "software development",
-    "online seller",
-    "trading",
-    "digital marketing",
-    "freelancing",
-    "professional services",
-    "India",
-    "Madhya Pradesh",
-    "ecommerce",
-    "branding",
+    "online shopping",
   ],
-  metadataBase: new URL("https://deepakkhiraenterprises.netlify.app/"),
-  openGraph: {
-    title: "Deepak Khira Enterprises",
-    description:
-      "Online Products • Trading • Digital Services • Content Creation. Trusted online seller from India.",
-    url: "https://deepakkhiraenterprises.netlify.app/",
-    siteName: "Deepak Khira Enterprises",
-    images: [
-      {
-        url: "/og-image.jpg",
-        width: 1200,
-        height: 630,
-        alt: "Deepak Khira Enterprises",
-      },
-    ],
-    locale: "en_IN",
-    type: "website",
+
+  authors: [
+    {
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+  ],
+
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+
+  alternates: {
+    canonical: "/",
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "Deepak Khira Enterprises",
-    description:
-      "Professional online services for web development, design, and business solutions.",
-    images: [
-      {
-        url: "/twitter-image.jpg",
-        width: 1200,
-        height: 630,
-        alt: "Deepak Khira Enterprises",
-      },
-    ],
-  },
+
   robots: {
     index: true,
     follow: true,
+
     googleBot: {
       index: true,
       follow: true,
-      "max-video-preview": -1,
       "max-image-preview": "large",
       "max-snippet": -1,
+      "max-video-preview": -1,
     },
   },
+
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
+    icon: [
+      {
+        url: "/favicon.ico",
+        type: "image/x-icon",
+      },
+      {
+        url: "/logo.png",
+        type: "image/png",
+      },
+    ],
+
+    apple: [
+      {
+        url: "/logo.png",
+        type: "image/png",
+      },
+    ],
   },
+
+  manifest: "/manifest.webmanifest",
+
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+
+    images: [
+      {
+        url: "/business_logo.png",
+        width: 1200,
+        height: 630,
+        alt: SITE_NAME,
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: ["/business_logo.png"],
+  },
+
+  category: "business",
 };
+
+// ============================================================
+// VIEWPORT
+// ============================================================
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+
+  themeColor: [
+    {
+      media: "(prefers-color-scheme: light)",
+      color: "#ffffff",
+    },
+    {
+      media: "(prefers-color-scheme: dark)",
+      color: "#020617",
+    },
+  ],
+};
+
+// ============================================================
+// ROOT LAYOUT
+// ============================================================
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Chakra UI Color Mode Script */}
-        <script
-          id="chakra-script"
-          dangerouslySetInnerHTML={{
-            __html: `(function(){
-              try {
-                var theme = localStorage.getItem("chakra-ui-color-mode") || "light";
-                document.documentElement.style.setProperty("color-scheme", theme);
-                document.documentElement.setAttribute("data-theme", theme);
-              } catch(e){}
-            })();`,
-          }}
-        />
+    <html lang="en-IN" suppressHydrationWarning data-scroll-behavior="smooth">
+      <body
+        className={`${inter.className} bg-white text-gray-900 antialiased dark:bg-slate-950 dark:text-white`}
+      >
+        <CartProvider>
+          {/* GLOBAL NAVBAR */}
+          <Navbar />
 
-        {/* Favicon & Icons */}
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="shortcut icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <link
-          rel="icon"
-          type="image/png"
-          sizes="32x32"
-          href="/favicon-32x32.png"
-        />
-        <link
-          rel="icon"
-          type="image/png"
-          sizes="16x16"
-          href="/favicon-16x16.png"
-        />
-        <link rel="manifest" href="/site.webmanifest" />
+          {/* PAGE CONTENT */}
+          <main className="min-h-screen pt-20">{children}</main>
 
-        {/* JSON-LD Structured Data */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "Organization",
-              name: "Deepak Khira Enterprises",
-              url: "https://deepakkhiraenterprises.netlify.app/",
-              logo: "/business_logo.png",
-              sameAs: [
-                "https://facebook.com/deepakkhiraofficial",
-                "https://instagram.com/deepakkhiraofficial",
-                "https://linkedin.com/in/mrdeepakkushwah",
-              ],
-            }),
-          }}
-        />
-      </head>
+          {/* GLOBAL FOOTER */}
+          <Footer />
 
-      <body className={inter.className} suppressHydrationWarning>
-        <Navbar />
-        <Providers>{children}</Providers>
-        <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
-        <Footer />
+          {/* GLOBAL TOAST */}
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+
+              success: {
+                style: {
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  border: "1px solid #1e293b",
+                },
+              },
+
+              error: {
+                style: {
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  border: "1px solid #334155",
+                },
+              },
+            }}
+          />
+        </CartProvider>
       </body>
     </html>
   );

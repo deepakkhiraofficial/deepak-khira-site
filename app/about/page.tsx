@@ -246,7 +246,7 @@ export default function About() {
             Let’s Build Something Amazing
           </h2>
           <p className="text-gray-600 mb-6">
-            Whether it's a business website, admin system, or complete web
+            Whether it&apos;s a business website, admin system, or complete web
             application — we can build it.
           </p>
           <a

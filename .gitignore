@@ -48,4 +48,11 @@ next-env.d.ts
 *.swn
 *.swd
 
+
+# local env
+.env
+.env.local
+.env.*.local
+
+
     
