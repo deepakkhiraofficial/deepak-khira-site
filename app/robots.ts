@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_BASE_URL ||
-  "https://deepak-khira-enterprises.in";
+  "https://deepakkhiraenterprises.netlify.app";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -10,16 +10,17 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
+
         disallow: [
-          "/admin/",
-          "/api/",
-          "/dashboard/",
-          "/account/",
-          "/checkout/",
-          "/cart/",
-          "/orders/",
-          "/login/",
-          "/signup/",
+          "/admin",
+          "/api",
+          "/dashboard",
+          "/account",
+          "/checkout",
+          "/cart",
+          "/orders",
+          "/login",
+          "/signup",
         ],
       },
     ],
