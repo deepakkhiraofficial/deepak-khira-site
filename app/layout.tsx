@@ -23,41 +23,65 @@ const inter = Inter({
 // SITE CONFIG
 // ============================================================
 
-const SITE_URL = "https://deepak-khira-enterprises.in";
+// CURRENT LIVE WEBSITE
+const SITE_URL = "https://deepakkhiraenterprises.netlify.app";
 
 const SITE_NAME = "Deepak Khira Enterprises";
 
 const SITE_DESCRIPTION =
-  "Deepak Khira Enterprises provides online products, digital services, web development, branding, and business solutions for customers and businesses.";
+  "Deepak Khira Enterprises provides quality products, digital services, web development, branding, and business solutions for customers and businesses across India.";
 
 // ============================================================
 // METADATA
 // ============================================================
 
 export const metadata: Metadata = {
+  // ----------------------------------------------------------
+  // BASE URL
+  // ----------------------------------------------------------
+
   metadataBase: new URL(SITE_URL),
+
+  // ----------------------------------------------------------
+  // TITLE
+  // ----------------------------------------------------------
 
   title: {
     default: SITE_NAME,
     template: `%s | ${SITE_NAME}`,
   },
 
+  // ----------------------------------------------------------
+  // DESCRIPTION
+  // ----------------------------------------------------------
+
   description: SITE_DESCRIPTION,
 
   applicationName: SITE_NAME,
 
+  // ----------------------------------------------------------
+  // KEYWORDS
+  // ----------------------------------------------------------
+
   keywords: [
     "Deepak Khira Enterprises",
     "Deepak Khira",
-    "online seller India",
+    "Deepak Khira Enterprises India",
+    "Deepak Khira products",
+    "online shopping India",
+    "online products India",
     "e-commerce India",
-    "digital services",
-    "web development",
+    "digital services India",
+    "web development India",
     "website development",
     "branding services",
-    "business solutions",
-    "online shopping",
+    "business solutions India",
+    "quality products India",
   ],
+
+  // ----------------------------------------------------------
+  // AUTHOR
+  // ----------------------------------------------------------
 
   authors: [
     {
@@ -69,9 +93,25 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
 
+  // ----------------------------------------------------------
+  // GOOGLE SEARCH CONSOLE VERIFICATION
+  // ----------------------------------------------------------
+
+  verification: {
+    google: "w82R7WzR0qzxSW09B13a2lToFEPFSOjkp7-U9SEIPMc",
+  },
+
+  // ----------------------------------------------------------
+  // CANONICAL
+  // ----------------------------------------------------------
+
   alternates: {
     canonical: "/",
   },
+
+  // ----------------------------------------------------------
+  // ROBOTS / SEARCH ENGINE INDEXING
+  // ----------------------------------------------------------
 
   robots: {
     index: true,
@@ -80,11 +120,16 @@ export const metadata: Metadata = {
     googleBot: {
       index: true,
       follow: true,
+
       "max-image-preview": "large",
       "max-snippet": -1,
       "max-video-preview": -1,
     },
   },
+
+  // ----------------------------------------------------------
+  // ICONS
+  // ----------------------------------------------------------
 
   icons: {
     icon: [
@@ -106,19 +151,32 @@ export const metadata: Metadata = {
     ],
   },
 
+  // ----------------------------------------------------------
+  // WEB APP MANIFEST
+  // ----------------------------------------------------------
+
   manifest: "/manifest.webmanifest",
+
+  // ----------------------------------------------------------
+  // OPEN GRAPH
+  // ----------------------------------------------------------
 
   openGraph: {
     type: "website",
+
     locale: "en_IN",
+
     url: SITE_URL,
+
     siteName: SITE_NAME,
+
     title: SITE_NAME,
+
     description: SITE_DESCRIPTION,
 
     images: [
       {
-        url: "/business_logo.png",
+        url: `${SITE_URL}/business_logo.png`,
         width: 1200,
         height: 630,
         alt: SITE_NAME,
@@ -126,12 +184,23 @@ export const metadata: Metadata = {
     ],
   },
 
+  // ----------------------------------------------------------
+  // TWITTER / X
+  // ----------------------------------------------------------
+
   twitter: {
     card: "summary_large_image",
+
     title: SITE_NAME,
+
     description: SITE_DESCRIPTION,
-    images: ["/business_logo.png"],
+
+    images: [`${SITE_URL}/business_logo.png`],
   },
+
+  // ----------------------------------------------------------
+  // CATEGORY
+  // ----------------------------------------------------------
 
   category: "business",
 };
@@ -142,6 +211,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   width: "device-width",
+
   initialScale: 1,
 
   themeColor: [
@@ -171,16 +241,28 @@ export default function RootLayout({
         className={`${inter.className} bg-white text-gray-900 antialiased dark:bg-slate-950 dark:text-white`}
       >
         <CartProvider>
-          {/* GLOBAL NAVBAR */}
+          {/* ==================================================
+              GLOBAL NAVBAR
+          ================================================== */}
+
           <Navbar />
 
-          {/* PAGE CONTENT */}
+          {/* ==================================================
+              PAGE CONTENT
+          ================================================== */}
+
           <main className="min-h-screen pt-20">{children}</main>
 
-          {/* GLOBAL FOOTER */}
+          {/* ==================================================
+              GLOBAL FOOTER
+          ================================================== */}
+
           <Footer />
 
-          {/* GLOBAL TOAST */}
+          {/* ==================================================
+              GLOBAL TOAST
+          ================================================== */}
+
           <Toaster
             position="top-right"
             toastOptions={{
