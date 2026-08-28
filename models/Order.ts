@@ -1,18 +1,52 @@
 import mongoose from "mongoose";
 
-const OrderItemSchema = new mongoose.Schema({
-  product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
-  name: String,
-  price: Number,
-  quantity: { type: Number, default: 1 },
-  image: String,
-});
+const OrderItemSchema = new mongoose.Schema(
+  {
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      required: true,
+    },
+
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    price: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+
+    image: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false }
+);
 
 const OrderSchema = new mongoose.Schema(
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
 
-    items: [OrderItemSchema],
+    items: {
+      type: [OrderItemSchema],
+      required: true,
+    },
 
     shippingAddress: {
       fullName: String,
@@ -25,35 +59,126 @@ const OrderSchema = new mongoose.Schema(
     },
 
     payment: {
-      method: { type: String, default: "COD" },
-      paid: { type: Boolean, default: false },
+      method: {
+        type: String,
+        enum: ["COD", "ONLINE"],
+        default: "COD",
+        index: true,
+      },
+    
+      status: {
+        type: String,
+        enum: [
+          "pending",
+          "authorized",
+          "captured",
+          "failed",
+          "refunded",
+          "partially_refunded",
+        ],
+        default: "pending",
+        index: true,
+      },
+    
+      paid: {
+        type: Boolean,
+        default: false,
+      },
+    
       paidAt: Date,
-      transactionId: String,
+    
+      transactionId: {
+        type: String,
+        default: "",
+        index: true,
+      },
+    
+      razorpayOrderId: {
+        type: String,
+        default: "",
+        index: true,
+      },
+    
+      razorpayPaymentId: {
+        type: String,
+        default: "",
+        index: true,
+      },
+    
+      razorpaySignature: {
+        type: String,
+        default: "",
+      },
+    
+      failureReason: {
+        type: String,
+        default: "",
+      },
     },
 
-    itemsTotal: { type: Number, required: true, default: 0 },
-    shippingPrice: { type: Number, default: 0 },
-    taxPrice: { type: Number, default: 0 },
-    totalPrice: { type: Number, required: true },
+    itemsTotal: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    shippingPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    taxPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    totalPrice: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
 
     status: {
       type: String,
-      enum: ["placed", "confirmed", "packed", "shipped", "delivered", "cancelled", "returned"],
+      enum: [
+        "placed",
+        "confirmed",
+        "packed",
+        "shipped",
+        "delivered",
+        "cancelled",
+        "returned",
+      ],
       default: "placed",
+      index: true,
     },
 
     statusHistory: [
       {
         status: String,
         message: String,
-        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-        createdAt: { type: Date, default: Date.now },
+        changedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
 
-    notes: String,
+    notes: {
+      type: String,
+      default: "",
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-export default mongoose.models.Order || mongoose.model("Order", OrderSchema);
+export default mongoose.models.Order ||
+  mongoose.model("Order", OrderSchema);

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Filter,
@@ -27,6 +27,7 @@ import { useCart } from "@/components/cart/CartContext";
 interface ProductsResponse {
   success: boolean;
   products: Product[];
+
   pagination?: {
     total: number;
     page: number;
@@ -35,6 +36,7 @@ interface ProductsResponse {
     hasNextPage: boolean;
     hasPreviousPage: boolean;
   };
+
   totalPages?: number;
   message?: string;
 }
@@ -43,16 +45,35 @@ interface CategoryObject {
   name?: unknown;
 }
 
+interface CachedCategories {
+  categories: string[];
+  expiresAt: number;
+}
+
 // ============================================================
 // CONSTANTS
 // ============================================================
 
 const API_URL = "/api/products";
+const CATEGORIES_API_URL = "/api/categories";
 
 const DEFAULT_MIN_PRICE = 0;
 const DEFAULT_MAX_PRICE = 2000;
 
 const PAGE_LIMIT = 12;
+
+// Search/filter debounce.
+// Prevents an API request on every keystroke.
+const SEARCH_DEBOUNCE_MS = 350;
+
+// Small cache for categories.
+const CATEGORY_CACHE_TTL = 5 * 60 * 1000;
+
+// ============================================================
+// MODULE CACHE
+// ============================================================
+
+let categoriesCache: CachedCategories | null = null;
 
 // ============================================================
 // HELPERS
@@ -93,6 +114,44 @@ function getSafeRating(rating: number | null | undefined): number {
   return Math.max(0, Math.min(5, value));
 }
 
+function normalizeCategoryData(data: unknown): string[] {
+  const categoryList: unknown[] = Array.isArray(data)
+    ? data
+    : data &&
+        typeof data === "object" &&
+        "categories" in data &&
+        Array.isArray(
+          (
+            data as {
+              categories?: unknown;
+            }
+          ).categories
+        )
+      ? (
+          data as {
+            categories: unknown[];
+          }
+        ).categories
+      : [];
+
+  const normalized = categoryList
+    .map((item: unknown): string => {
+      if (typeof item === "string") {
+        return item;
+      }
+
+      if (item && typeof item === "object" && "name" in item) {
+        return String((item as CategoryObject).name || "");
+      }
+
+      return "";
+    })
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(normalized)).sort((a, b) => a.localeCompare(b));
+}
+
 // ============================================================
 // COMPONENT
 // ============================================================
@@ -103,7 +162,7 @@ export default function ProductsPageClient() {
   const { addToCart } = useCart();
 
   // ==========================================================
-  // URL STATE
+  // INITIAL URL STATE
   // ==========================================================
 
   const initialSearch = searchParams.get("search") || "";
@@ -147,6 +206,16 @@ export default function ProductsPageClient() {
   const [addingProductId, setAddingProductId] = useState<string | null>(null);
 
   // ==========================================================
+  // REQUEST REFS
+  // ==========================================================
+
+  const requestControllerRef = useRef<AbortController | null>(null);
+
+  const requestIdRef = useRef(0);
+
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ==========================================================
   // FETCH CATEGORIES
   // ==========================================================
 
@@ -154,10 +223,29 @@ export default function ProductsPageClient() {
     let cancelled = false;
 
     const fetchCategories = async () => {
+      // ----------------------------------------------------
+      // MEMORY CACHE
+      // ----------------------------------------------------
+
+      if (categoriesCache && categoriesCache.expiresAt > Date.now()) {
+        setCategories(categoriesCache.categories);
+
+        return;
+      }
+
       try {
-        const response = await fetch("/api/categories", {
+        const response = await fetch(CATEGORIES_API_URL, {
           method: "GET",
-          cache: "no-store",
+
+          headers: {
+            Accept: "application/json",
+          },
+
+          cache: "force-cache",
+
+          next: {
+            revalidate: 300,
+          },
         });
 
         if (!response.ok) {
@@ -170,37 +258,24 @@ export default function ProductsPageClient() {
           return;
         }
 
-        const categoryList: unknown[] = Array.isArray(data)
-          ? data
-          : data &&
-              typeof data === "object" &&
-              "categories" in data &&
-              Array.isArray((data as { categories?: unknown }).categories)
-            ? (data as { categories: unknown[] }).categories
-            : [];
+        const normalized = normalizeCategoryData(data);
 
-        const normalized: string[] = categoryList
-          .map((item: unknown): string => {
-            if (typeof item === "string") {
-              return item;
-            }
+        categoriesCache = {
+          categories: normalized,
+          expiresAt: Date.now() + CATEGORY_CACHE_TTL,
+        };
 
-            if (item && typeof item === "object" && "name" in item) {
-              return String((item as CategoryObject).name || "");
-            }
-
-            return "";
-          })
-          .map((item: string): string => item.trim())
-          .filter((item: string): boolean => Boolean(item));
-
-        setCategories(Array.from(new Set(normalized)));
+        setCategories(normalized);
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
         console.error("CATEGORY FETCH ERROR:", error);
       }
     };
 
-    fetchCategories();
+    void fetchCategories();
 
     return () => {
       cancelled = true;
@@ -211,65 +286,149 @@ export default function ProductsPageClient() {
   // FETCH PRODUCTS
   // ==========================================================
 
-  const fetchProducts = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
+  const fetchProducts = useCallback(
+    async (signal?: AbortSignal) => {
+      const requestId = ++requestIdRef.current;
 
-      const params = new URLSearchParams();
+      try {
+        setLoading(true);
+        setError("");
 
-      params.set("page", String(page));
+        const params = new URLSearchParams();
 
-      params.set("limit", String(PAGE_LIMIT));
+        params.set("page", String(page));
 
-      params.set("sort", sort || "-createdAt");
+        params.set("limit", String(PAGE_LIMIT));
 
-      params.set("minPrice", String(minPrice));
+        params.set("sort", sort || "-createdAt");
 
-      params.set("maxPrice", String(maxPrice));
+        params.set("minPrice", String(minPrice));
 
-      if (search.trim()) {
-        params.set("search", search.trim());
+        params.set("maxPrice", String(maxPrice));
+
+        const normalizedSearch = search.trim();
+
+        const normalizedCategory = selectedCategory.trim();
+
+        if (normalizedSearch) {
+          params.set("search", normalizedSearch);
+        }
+
+        if (normalizedCategory) {
+          params.set("category", normalizedCategory);
+        }
+
+        const response = await fetch(`${API_URL}?${params.toString()}`, {
+          method: "GET",
+
+          headers: {
+            Accept: "application/json",
+          },
+
+          signal,
+
+          // Browser can reuse a
+          // previously fetched response.
+          cache: "default",
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data: ProductsResponse = await response.json();
+
+        // Ignore stale requests.
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+
+        if (!data.success) {
+          throw new Error(data.message || "Unable to load products.");
+        }
+
+        const nextProducts = Array.isArray(data.products) ? data.products : [];
+
+        setProducts(nextProducts);
+
+        setTotal(data.pagination?.total || 0);
+
+        setTotalPages(data.pagination?.totalPages || data.totalPages || 0);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
+        console.error("PRODUCT FETCH ERROR:", error);
+
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+
+        setProducts([]);
+        setTotal(0);
+        setTotalPages(0);
+
+        setError("Unable to load products. Please try again.");
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
+    },
+    [page, sort, minPrice, maxPrice, search, selectedCategory]
+  );
 
-      if (selectedCategory.trim()) {
-        params.set("category", selectedCategory.trim());
-      }
-
-      const response = await fetch(`${API_URL}?${params.toString()}`, {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      const data: ProductsResponse = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Unable to load products.");
-      }
-
-      setProducts(Array.isArray(data.products) ? data.products : []);
-
-      setTotal(data.pagination?.total || 0);
-
-      setTotalPages(data.pagination?.totalPages || data.totalPages || 0);
-    } catch (error) {
-      console.error("PRODUCT FETCH ERROR:", error);
-
-      setProducts([]);
-
-      setTotal(0);
-
-      setTotalPages(0);
-
-      setError("Unable to load products. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, sort, minPrice, maxPrice, search, selectedCategory]);
+  // ==========================================================
+  // PRODUCT REQUEST EFFECT
+  // ==========================================================
 
   useEffect(() => {
-    fetchProducts();
+    // Cancel previous request.
+    requestControllerRef.current?.abort();
+
+    const controller = new AbortController();
+
+    requestControllerRef.current = controller;
+
+    // --------------------------------------------------------
+    // DEBOUNCE SEARCH/FILTER REQUESTS
+    // --------------------------------------------------------
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    searchDebounceRef.current = setTimeout(() => {
+      void fetchProducts(controller.signal);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      controller.abort();
+
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
   }, [fetchProducts]);
+
+  // ==========================================================
+  // CLEANUP REQUEST
+  // ==========================================================
+
+  useEffect(() => {
+    return () => {
+      requestControllerRef.current?.abort();
+
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, []);
 
   // ==========================================================
   // URL SYNC
@@ -278,12 +437,16 @@ export default function ProductsPageClient() {
   useEffect(() => {
     const urlParams = new URLSearchParams();
 
-    if (search.trim()) {
-      urlParams.set("search", search.trim());
+    const normalizedSearch = search.trim();
+
+    const normalizedCategory = selectedCategory.trim();
+
+    if (normalizedSearch) {
+      urlParams.set("search", normalizedSearch);
     }
 
-    if (selectedCategory.trim()) {
-      urlParams.set("category", selectedCategory.trim());
+    if (normalizedCategory) {
+      urlParams.set("category", normalizedCategory);
     }
 
     if (sort && sort !== "-createdAt") {
@@ -302,23 +465,65 @@ export default function ProductsPageClient() {
   }, [search, selectedCategory, sort, page]);
 
   // ==========================================================
-  // RESET PAGE WHEN FILTER CHANGES
+  // SEARCH
   // ==========================================================
 
   const changeSearch = (value: string) => {
     setSearch(value);
-    setPage(1);
+
+    if (page !== 1) {
+      setPage(1);
+    }
   };
+
+  // ==========================================================
+  // CATEGORY
+  // ==========================================================
 
   const changeCategory = (value: string) => {
     setSelectedCategory(value);
-    setPage(1);
+
+    if (page !== 1) {
+      setPage(1);
+    }
+
     setMobileFiltersOpen(false);
   };
 
+  // ==========================================================
+  // SORT
+  // ==========================================================
+
   const changeSort = (value: string) => {
     setSort(value);
-    setPage(1);
+
+    if (page !== 1) {
+      setPage(1);
+    }
+  };
+
+  // ==========================================================
+  // PRICE
+  // ==========================================================
+
+  const changeMinPrice = (value: string) => {
+    const parsed = Number(value);
+
+    setMinPrice(Number.isFinite(parsed) ? Math.max(0, parsed) : 0);
+
+    if (page !== 1) {
+      setPage(1);
+    }
+  };
+
+  const changeMaxPrice = (value: string) => {
+    const parsed = Number(value);
+
+    setMaxPrice(Number.isFinite(parsed) ? Math.max(0, parsed) : 0);
+
+    if (page !== 1) {
+      setPage(1);
+    }
   };
 
   // ==========================================================
@@ -329,9 +534,13 @@ export default function ProductsPageClient() {
     setSearch("");
     setSelectedCategory("");
     setSort("-createdAt");
+
     setMinPrice(DEFAULT_MIN_PRICE);
+
     setMaxPrice(DEFAULT_MAX_PRICE);
+
     setPage(1);
+
     setMobileFiltersOpen(false);
   };
 
@@ -339,41 +548,45 @@ export default function ProductsPageClient() {
   // ADD TO CART
   // ==========================================================
 
-  const handleAddToCart = (product: Product) => {
-    if (!product || !product._id || !product.name || !product.slug) {
-      console.error("INVALID PRODUCT:", product);
+  const handleAddToCart = useCallback(
+    (product: Product) => {
+      if (!product || !product._id || !product.name || !product.slug) {
+        console.error("INVALID PRODUCT:", product);
 
-      toast.error("Unable to add this product to cart.");
+        toast.error("Unable to add this product to cart.");
 
-      return;
-    }
+        return;
+      }
 
-    const productStock = getSafeStock(product.stock);
+      const productStock = getSafeStock(product.stock);
 
-    if (
-      product.status !== "active" ||
-      product.inStock !== true ||
-      productStock <= 0
-    ) {
-      toast.error("Product is currently out of stock.");
+      const isAvailable =
+        product.status === "active" &&
+        product.inStock === true &&
+        productStock > 0;
 
-      return;
-    }
+      if (!isAvailable) {
+        toast.error("Product is currently out of stock.");
 
-    try {
-      setAddingProductId(product._id);
+        return;
+      }
 
-      addToCart(product, 1);
+      try {
+        setAddingProductId(product._id);
 
-      toast.success(`${product.name} added to cart`);
-    } catch (error) {
-      console.error("ADD TO CART ERROR:", error);
+        addToCart(product, 1);
 
-      toast.error("Unable to add product to cart.");
-    } finally {
-      setAddingProductId(null);
-    }
-  };
+        toast.success(`${product.name} added to cart`);
+      } catch (error) {
+        console.error("ADD TO CART ERROR:", error);
+
+        toast.error("Unable to add product to cart.");
+      } finally {
+        setAddingProductId(null);
+      }
+    },
+    [addToCart]
+  );
 
   // ==========================================================
   // ACTIVE FILTER COUNT
@@ -416,7 +629,9 @@ export default function ProductsPageClient() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, index) => (
+            {Array.from({
+              length: 8,
+            }).map((_, index) => (
               <div
                 key={index}
                 className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
@@ -447,7 +662,7 @@ export default function ProductsPageClient() {
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* ======================================================
-          HERO / HEADER
+          HEADER
       ======================================================= */}
 
       <section className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -489,6 +704,7 @@ export default function ProductsPageClient() {
                 onChange={(event) => changeSearch(event.target.value)}
                 placeholder="Search products..."
                 aria-label="Search products"
+                autoComplete="off"
                 className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:ring-blue-950"
               />
             </div>
@@ -562,7 +778,7 @@ export default function ProductsPageClient() {
                     All Categories
                   </button>
 
-                  {categories.map((category: string) => (
+                  {categories.map((category) => (
                     <button
                       key={category}
                       type="button"
@@ -591,13 +807,10 @@ export default function ProductsPageClient() {
                     type="number"
                     min={0}
                     value={minPrice}
-                    onChange={(event) => {
-                      setMinPrice(Math.max(0, Number(event.target.value) || 0));
-
-                      setPage(1);
-                    }}
+                    onChange={(event) => changeMinPrice(event.target.value)}
                     placeholder="Min"
                     aria-label="Minimum price"
+                    inputMode="numeric"
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
 
@@ -605,13 +818,10 @@ export default function ProductsPageClient() {
                     type="number"
                     min={0}
                     value={maxPrice}
-                    onChange={(event) => {
-                      setMaxPrice(Math.max(0, Number(event.target.value) || 0));
-
-                      setPage(1);
-                    }}
+                    onChange={(event) => changeMaxPrice(event.target.value)}
                     placeholder="Max"
                     aria-label="Maximum price"
+                    inputMode="numeric"
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -650,12 +860,10 @@ export default function ProductsPageClient() {
           =================================================== */}
 
           <div>
-            {/* TOP BAR */}
-
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-slate-500 dark:text-slate-400">
                 {loading
-                  ? "Loading products..."
+                  ? "Updating products..."
                   : `Showing ${products.length} of ${total}`}
               </div>
 
@@ -691,7 +899,11 @@ export default function ProductsPageClient() {
 
                 <button
                   type="button"
-                  onClick={fetchProducts}
+                  onClick={() => {
+                    requestControllerRef.current?.abort();
+
+                    void fetchProducts();
+                  }}
                   className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
                 >
                   Try Again
@@ -726,8 +938,12 @@ export default function ProductsPageClient() {
             {/* PRODUCTS */}
 
             {products.length > 0 && (
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                {products.map((product: Product) => {
+              <div
+                className={`grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 ${
+                  loading ? "opacity-70 transition-opacity" : ""
+                }`}
+              >
+                {products.map((product, index) => {
                   const productImage = getProductImage(product);
 
                   const productPrice = getSafePrice(product.price);
@@ -757,8 +973,10 @@ export default function ProductsPageClient() {
                             src={productImage}
                             alt={`${product.name} - ${product.category}`}
                             fill
-                            sizes="(max-inline-size: 640px) 100vw, (max-inline-size: 1280px) 33vw, 25vw"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
                             className="object-contain p-5 transition duration-500 group-hover:scale-105"
+                            priority={index < 2}
+                            loading={index < 2 ? "eager" : "lazy"}
                           />
                         </div>
 
@@ -792,12 +1010,12 @@ export default function ProductsPageClient() {
                           <div className="flex">
                             {Array.from({
                               length: 5,
-                            }).map((_, index: number) => (
+                            }).map((_, starIndex) => (
                               <Star
-                                key={index}
+                                key={starIndex}
                                 size={14}
                                 className={
-                                  index < Math.round(productRating)
+                                  starIndex < Math.round(productRating)
                                     ? "fill-yellow-400 text-yellow-400"
                                     : "text-slate-300 dark:text-slate-600"
                                 }
@@ -866,9 +1084,7 @@ export default function ProductsPageClient() {
               </div>
             )}
 
-            {/* ==================================================
-                PAGINATION
-            =================================================== */}
+            {/* PAGINATION */}
 
             {totalPages > 1 && (
               <nav
@@ -959,7 +1175,7 @@ export default function ProductsPageClient() {
                   All Categories
                 </button>
 
-                {categories.map((category: string) => (
+                {categories.map((category) => (
                   <button
                     key={category}
                     type="button"
@@ -988,12 +1204,10 @@ export default function ProductsPageClient() {
                   type="number"
                   min={0}
                   value={minPrice}
-                  onChange={(event) => {
-                    setMinPrice(Math.max(0, Number(event.target.value) || 0));
-
-                    setPage(1);
-                  }}
+                  onChange={(event) => changeMinPrice(event.target.value)}
                   placeholder="Min"
+                  aria-label="Minimum price"
+                  inputMode="numeric"
                   className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
 
@@ -1001,12 +1215,10 @@ export default function ProductsPageClient() {
                   type="number"
                   min={0}
                   value={maxPrice}
-                  onChange={(event) => {
-                    setMaxPrice(Math.max(0, Number(event.target.value) || 0));
-
-                    setPage(1);
-                  }}
+                  onChange={(event) => changeMaxPrice(event.target.value)}
                   placeholder="Max"
+                  aria-label="Maximum price"
+                  inputMode="numeric"
                   className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>

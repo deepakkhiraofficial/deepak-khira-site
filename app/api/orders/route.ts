@@ -483,7 +483,14 @@ export async function POST(req: Request) {
 
         payment: {
           method: paymentMethod,
+          status: paymentMethod === "COD" ? "pending" : "pending",
           paid: false,
+          paidAt: undefined,
+          transactionId: "",
+          razorpayOrderId: "",
+          razorpayPaymentId: "",
+          razorpaySignature: "",
+          failureReason: "",
         },
 
         itemsTotal,
@@ -510,42 +517,39 @@ export async function POST(req: Request) {
     // REDUCE STOCK
     // --------------------------------------------------------
 
-    for (const item of orderItems) {
-      const updatedProduct =
-        await Product.findOneAndUpdate(
-          {
-            _id: item.product,
-            stock: {
-              $gte: item.quantity,
+    if (paymentMethod === "COD") {
+      for (const item of orderItems) {
+        const updatedProduct =
+          await Product.findOneAndUpdate(
+            {
+              _id: item.product,
+              stock: {
+                $gte: item.quantity,
+              },
             },
-          },
-          {
-            $inc: {
-              stock:
-                -item.quantity,
+            {
+              $inc: {
+                stock: -item.quantity,
+              },
             },
-          },
-          {
-            new: true,
-          }
-        );
-
-      if (!updatedProduct) {
-        // NOTE:
-        // For full production reliability,
-        // use MongoDB transaction here.
-        console.error(
-          "STOCK UPDATE FAILED FOR PRODUCT:",
-          item.product
-        );
-      } else {
-        updatedProduct.inStock =
-          updatedProduct.stock > 0;
-
-        await updatedProduct.save();
+            {
+              new: true,
+            }
+          );
+    
+        if (!updatedProduct) {
+          console.error(
+            "STOCK UPDATE FAILED FOR PRODUCT:",
+            item.product
+          );
+        } else {
+          updatedProduct.inStock =
+            updatedProduct.stock > 0;
+    
+          await updatedProduct.save();
+        }
       }
     }
-
     // --------------------------------------------------------
     // RESPONSE
     // --------------------------------------------------------
@@ -564,6 +568,8 @@ export async function POST(req: Request) {
           paymentMethod:
             order.payment.method,
         },
+
+        
       },
       { status: 201 }
     );
@@ -583,3 +589,4 @@ export async function POST(req: Request) {
     );
   }
 }
+

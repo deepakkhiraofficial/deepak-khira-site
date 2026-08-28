@@ -35,6 +35,8 @@ type ProductsResponse = {
   };
 };
 
+const PRODUCTS_LIMIT = 8;
+
 export default function ProductsSection() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,44 +45,58 @@ export default function ProductsSection() {
   const { addToCart } = useCart();
 
   useEffect(() => {
-    let mounted = true;
+    const controller = new AbortController();
 
     async function loadProducts() {
       try {
         setLoading(true);
         setError("");
 
-        const params = new URLSearchParams();
-
-        params.set("page", "1");
-        params.set("limit", "8");
-        params.set("status", "active");
-
-        // Latest products first
-        params.set("sort", "-createdAt");
+        const params = new URLSearchParams({
+          page: "1",
+          limit: String(PRODUCTS_LIMIT),
+          status: "active",
+          sort: "-createdAt",
+        });
 
         const response = await fetch(`/api/products?${params.toString()}`, {
           method: "GET",
-          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+          },
+
+          // Allow the browser/CDN to reuse the response briefly.
+          // This reduces unnecessary repeated requests while keeping
+          // product data reasonably fresh.
+          cache: "force-cache",
+
+          signal: controller.signal,
         });
+
+        if (!response.ok) {
+          throw new Error(`Products API returned ${response.status}`);
+        }
 
         const data: ProductsResponse = await response.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error("Unable to load products.");
+        if (!data.success) {
+          throw new Error("Products API returned an unsuccessful response.");
         }
 
-        if (mounted) {
-          setProducts(Array.isArray(data.products) ? data.products : []);
-        }
+        const nextProducts = Array.isArray(data.products) ? data.products : [];
+
+        setProducts(nextProducts);
       } catch (error) {
+        // Abort is expected when the component unmounts.
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
         console.error("PRODUCTS SECTION ERROR:", error);
 
-        if (mounted) {
-          setError("Unable to load products right now.");
-        }
+        setError("Unable to load products right now.");
       } finally {
-        if (mounted) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
@@ -89,23 +105,24 @@ export default function ProductsSection() {
     loadProducts();
 
     return () => {
-      mounted = false;
+      controller.abort();
     };
   }, []);
 
-  function getImage(product: Product) {
-    if (
-      Array.isArray(product.images) &&
-      product.images.length > 0 &&
-      product.images[0]
-    ) {
-      return product.images[0];
-    }
+  function getImage(product: Product): string {
+    const firstImage =
+      Array.isArray(product.images) && product.images.length > 0
+        ? product.images[0]
+        : undefined;
 
-    return "/placeholder.png";
+    return firstImage?.trim() ? firstImage : "/placeholder.png";
   }
 
-  function isAvailable(product: Product) {
+  function getProductUrl(product: Product): string {
+    return `/products/${product.slug || product._id}`;
+  }
+
+  function isAvailable(product: Product): boolean {
     return (
       product.status === "active" &&
       product.inStock !== false &&
@@ -131,7 +148,10 @@ export default function ProductsSection() {
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5">
-              <PackageOpen className="h-3.5 w-3.5 text-blue-600" />
+              <PackageOpen
+                className="h-3.5 w-3.5 text-blue-600"
+                aria-hidden="true"
+              />
 
               <span className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">
                 New Arrivals
@@ -153,7 +173,10 @@ export default function ProductsSection() {
             className="group inline-flex w-fit items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:border-blue-600 hover:text-blue-600"
           >
             View All Products
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            <ArrowRight
+              className="h-4 w-4 transition-transform group-hover:translate-x-1"
+              aria-hidden="true"
+            />
           </Link>
         </div>
 
@@ -162,15 +185,21 @@ export default function ProductsSection() {
         ====================================================== */}
 
         {loading && (
-          <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div
+            className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+            aria-label="Loading products"
+          >
             {Array.from({
-              length: 8,
+              length: PRODUCTS_LIMIT,
             }).map((_, index) => (
               <div
                 key={index}
                 className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
               >
-                <div className="aspect-square animate-pulse bg-slate-100" />
+                <div
+                  className="aspect-square animate-pulse bg-slate-100"
+                  aria-hidden="true"
+                />
 
                 <div className="space-y-3 p-4">
                   <div className="h-3 w-1/3 animate-pulse rounded bg-slate-100" />
@@ -198,7 +227,7 @@ export default function ProductsSection() {
 
             <Link
               href="/products"
-              className="mt-4 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+              className="mt-4 inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
             >
               Open Products
             </Link>
@@ -211,12 +240,14 @@ export default function ProductsSection() {
 
         {!loading && !error && products.length > 0 && (
           <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {products.map((product) => {
+            {products.map((product, index) => {
               const available = isAvailable(product);
 
               const image = getImage(product);
 
               const rating = Number(product.rating ?? 0);
+
+              const productUrl = getProductUrl(product);
 
               return (
                 <article
@@ -228,8 +259,9 @@ export default function ProductsSection() {
                       ================================================== */}
 
                   <Link
-                    href={`/products/${product.slug || product._id}`}
+                    href={productUrl}
                     className="relative block aspect-square overflow-hidden bg-slate-100"
+                    aria-label={`View ${product.name}`}
                   >
                     <Image
                       src={image}
@@ -237,6 +269,16 @@ export default function ProductsSection() {
                       fill
                       sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
                       className="object-cover transition duration-500 group-hover:scale-105"
+                      /*
+                       * The first product is most likely to contribute
+                       * to LCP on the homepage.
+                       */
+                      priority={index === 0}
+                      /*
+                       * Prevent the browser from decoding/rendering
+                       * unnecessary images too aggressively.
+                       */
+                      quality={85}
                     />
 
                     {/* New badge */}
@@ -277,10 +319,7 @@ export default function ProductsSection() {
 
                     {/* Name */}
 
-                    <Link
-                      href={`/products/${product.slug || product._id}`}
-                      className="mt-1"
-                    >
+                    <Link href={productUrl} className="mt-1">
                       <h3 className="line-clamp-2 min-h-[40px] text-sm font-semibold leading-5 text-slate-900 transition group-hover:text-blue-600 sm:text-base">
                         {product.name}
                       </h3>
@@ -288,10 +327,20 @@ export default function ProductsSection() {
 
                     {/* Rating */}
 
-                    <div className="mt-2 flex min-h-[18px] items-center gap-1">
+                    <div
+                      className="mt-2 flex min-h-[18px] items-center gap-1"
+                      aria-label={
+                        rating > 0
+                          ? `Rating ${rating.toFixed(1)} out of 5`
+                          : "No ratings yet"
+                      }
+                    >
                       {rating > 0 ? (
                         <>
-                          <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                          <Star
+                            className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400"
+                            aria-hidden="true"
+                          />
 
                           <span className="text-xs font-semibold text-slate-700">
                             {rating.toFixed(1)}
@@ -324,9 +373,14 @@ export default function ProductsSection() {
                       type="button"
                       disabled={!available}
                       onClick={() => handleAddToCart(product)}
+                      aria-label={
+                        available
+                          ? `Add ${product.name} to cart`
+                          : `${product.name} is out of stock`
+                      }
                       className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:text-sm"
                     >
-                      <ShoppingCart className="h-4 w-4" />
+                      <ShoppingCart className="h-4 w-4" aria-hidden="true" />
 
                       {available ? "Add to Cart" : "Out of Stock"}
                     </button>
@@ -343,7 +397,10 @@ export default function ProductsSection() {
 
         {!loading && !error && products.length === 0 && (
           <div className="mt-10 rounded-2xl border border-slate-200 bg-slate-50 px-6 py-14 text-center">
-            <PackageOpen className="mx-auto h-10 w-10 text-slate-400" />
+            <PackageOpen
+              className="mx-auto h-10 w-10 text-slate-400"
+              aria-hidden="true"
+            />
 
             <h3 className="mt-4 text-lg font-bold text-slate-900">
               No products available
@@ -356,10 +413,10 @@ export default function ProductsSection() {
 
             <Link
               href="/products"
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-600"
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600"
             >
               Browse Products
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>
         )}
@@ -385,7 +442,7 @@ export default function ProductsSection() {
               className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-blue-50"
             >
               Explore All
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>
         )}

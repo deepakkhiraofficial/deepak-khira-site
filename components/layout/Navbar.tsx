@@ -65,6 +65,10 @@ export default function Navbar() {
   const searchRef = useRef<HTMLInputElement | null>(null);
   const previousCartCount = useRef(0);
 
+  // Prevent duplicate auth requests when focus/visibility events fire together.
+  const authRequestRef = useRef<Promise<void> | null>(null);
+  const lastAuthCheckRef = useRef(0);
+
   // ==========================================================
   // CART CHANGE ANIMATION
   // ==========================================================
@@ -91,76 +95,108 @@ export default function Navbar() {
   // AUTHENTICATION
   // ==========================================================
 
-  const checkAuth = useCallback(async () => {
-    const controller = new AbortController();
+  const checkAuth = useCallback(async (options?: { force?: boolean }) => {
+    const now = Date.now();
+    const force = options?.force === true;
 
-    try {
-      setAuthLoading(true);
-
-      const response = await fetch("/api/auth/me", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        setAuthUser(null);
-        return;
-      }
-
-      const data: AuthResponse = await response.json();
-
-      if (data.success && data.authenticated && data.user) {
-        setAuthUser(data.user);
-      } else {
-        setAuthUser(null);
-      }
-    } catch (error: unknown) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return;
-      }
-
-      console.error("AUTH CHECK ERROR:", error);
-      setAuthUser(null);
-    } finally {
-      if (!controller.signal.aborted) {
-        setAuthLoading(false);
-      }
+    // Avoid repeated /api/auth/me calls during rapid focus/visibility events.
+    if (
+      !force &&
+      lastAuthCheckRef.current > 0 &&
+      now - lastAuthCheckRef.current < 30_000
+    ) {
+      return;
     }
 
-    return () => controller.abort();
+    // Reuse an existing request instead of creating concurrent requests.
+    if (authRequestRef.current) {
+      return authRequestRef.current;
+    }
+
+    const request = (async () => {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 8_000);
+
+      try {
+        setAuthLoading(true);
+
+        const response = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          setAuthUser(null);
+          return;
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+
+        if (!contentType.includes("application/json")) {
+          setAuthUser(null);
+          return;
+        }
+
+        const data: AuthResponse = await response.json();
+
+        if (data.success && data.authenticated && data.user) {
+          setAuthUser(data.user);
+        } else {
+          setAuthUser(null);
+        }
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          console.warn("AUTH CHECK TIMEOUT");
+          return;
+        }
+
+        console.error("AUTH CHECK ERROR:", error);
+        setAuthUser(null);
+      } finally {
+        window.clearTimeout(timeoutId);
+        lastAuthCheckRef.current = Date.now();
+        setAuthLoading(false);
+      }
+    })();
+
+    authRequestRef.current = request;
+
+    try {
+      await request;
+    } finally {
+      if (authRequestRef.current === request) {
+        authRequestRef.current = null;
+      }
+    }
   }, []);
 
+  // Initial authentication check.
   useEffect(() => {
-    let active = true;
-
-    const run = async () => {
-      if (!active) return;
-      await checkAuth();
-    };
-
-    run();
-
-    return () => {
-      active = false;
-    };
+    void checkAuth({ force: true });
   }, [checkAuth]);
 
-  // Re-check authentication when browser tab becomes active.
+  // Re-check only when enough time has passed.
+  // This prevents focus + visibilitychange from hammering the auth API.
   useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        checkAuth();
+    const handleActivity = () => {
+      if (document.visibilityState !== "visible") {
+        return;
       }
+
+      void checkAuth();
     };
 
-    window.addEventListener("focus", checkAuth);
-    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleActivity);
+    document.addEventListener("visibilitychange", handleActivity);
 
     return () => {
-      window.removeEventListener("focus", checkAuth);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleActivity);
+      document.removeEventListener("visibilitychange", handleActivity);
     };
   }, [checkAuth]);
 
@@ -175,7 +211,7 @@ export default function Navbar() {
       try {
         const response = await fetch("/api/categories", {
           signal: controller.signal,
-          cache: "no-store",
+          cache: "force-cache",
         });
 
         if (!response.ok) return;
@@ -525,9 +561,7 @@ export default function Navbar() {
                     <div className="p-2">
                       <Link
                         href={
-                          authUser.role === "admin"
-                            ? "/admin/dashboard"
-                            : "/dashboard"
+                          authUser.role === "admin" ? "/admin" : "/dashboard"
                         }
                         role="menuitem"
                         className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-600"
@@ -573,13 +607,24 @@ export default function Navbar() {
                 </Transition>
               </div>
             ) : !authLoading ? (
-              <Link
-                href="/login"
-                className="hidden items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 sm:flex"
-              >
-                <HiOutlineUser size={19} />
-                Login
-              </Link>
+              <div className="hidden items-center gap-1 sm:flex">
+                <Link
+                  href="/login"
+                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-indigo-600"
+                >
+                  <HiOutlineUser size={19} />
+                  Login
+                </Link>
+
+                <Link
+                  href="/admin/login"
+                  prefetch={false}
+                  className="flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 transition hover:border-indigo-200 hover:bg-indigo-100"
+                >
+                  <HiOutlineViewGrid size={18} />
+                  Admin Login
+                </Link>
+              </div>
             ) : (
               <div className="hidden h-9 w-20 animate-pulse rounded-xl bg-gray-100 sm:block" />
             )}
@@ -699,11 +744,7 @@ export default function Navbar() {
                 </div>
 
                 <Link
-                  href={
-                    authUser.role === "admin"
-                      ? "/admin/dashboard"
-                      : "/dashboard"
-                  }
+                  href={authUser.role === "admin" ? "/admin" : "/dashboard"}
                   className="block rounded-xl px-3 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   {authUser.role === "admin"
@@ -745,6 +786,15 @@ export default function Navbar() {
                   className="block rounded-xl px-3 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Login
+                </Link>
+
+                <Link
+                  href="/admin/login"
+                  prefetch={false}
+                  className="flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+                >
+                  <HiOutlineViewGrid size={19} />
+                  Admin Login
                 </Link>
 
                 <Link

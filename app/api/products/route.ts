@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
+
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { requireAdmin } from "@/lib/auth";
 
+// ============================================================
+// ROUTE CONFIG
+// ============================================================
+
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // ============================================================
 // TYPES
@@ -11,31 +19,75 @@ export const dynamic = "force-dynamic";
 
 type SortDirection = 1 | -1;
 
+type PriceQuery = {
+  $gte?: number;
+  $lte?: number;
+};
+
 type ProductQuery = {
   status: "active" | "draft";
+
   featured?: boolean;
-
-  $or?: Array<Record<string, unknown>>;
-
-  $and?: Array<Record<string, unknown>>;
 
   category?: string | { $in: string[] };
 
-  price?: {
-    $gte?: number;
-    $lte?: number;
-  };
+  price?: PriceQuery;
 
   rating?: {
     $gte: number;
   };
 
   inStock?: boolean;
+
+  $text?: {
+    $search: string;
+  };
+
+  $or?: Array<Record<string, unknown>>;
+};
+
+type ProductListItem = {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  slug: string;
+  description: string;
+  category: string;
+  price: number;
+  stock: number;
+  inStock: boolean;
+  images: string[];
+  featured: boolean;
+  status: "active" | "draft";
+  rating: number;
+  popularityScore: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 };
 
 // ============================================================
 // CONSTANTS
 // ============================================================
+
+const MAX_LIMIT = 50;
+const DEFAULT_LIMIT = 12;
+
+const PRODUCT_SELECT = [
+  "_id",
+  "name",
+  "slug",
+  "description",
+  "category",
+  "price",
+  "stock",
+  "inStock",
+  "images",
+  "featured",
+  "status",
+  "rating",
+  "popularityScore",
+  "createdAt",
+  "updatedAt",
+].join(" ");
 
 const ALLOWED_SORT_FIELDS = new Set([
   "price",
@@ -46,9 +98,6 @@ const ALLOWED_SORT_FIELDS = new Set([
   "name",
   "stock",
 ]);
-
-const MAX_LIMIT = 50;
-const DEFAULT_LIMIT = 12;
 
 // ============================================================
 // HELPERS
@@ -87,11 +136,86 @@ function parsePositiveInteger(
   return number;
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
+function normalizeString(
+  value: string | null
+): string {
+  return value?.trim() || "";
+}
+
+function parseBoolean(
+  value: string | null
+): boolean | undefined {
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return undefined;
+}
+
+// ============================================================
+// SORT BUILDER
+// ============================================================
+
+function buildSort(
+  sortParam: string
+): Record<string, SortDirection> {
+  const sortQuery: Record<
+    string,
+    SortDirection
+  > = {};
+
+  const fields = sortParam
+    .split(",")
+    .map((field) => field.trim())
+    .filter(Boolean);
+
+  for (const field of fields) {
+    const descending = field.startsWith("-");
+
+    const fieldName = descending
+      ? field.slice(1)
+      : field;
+
+    if (!ALLOWED_SORT_FIELDS.has(fieldName)) {
+      continue;
+    }
+
+    sortQuery[fieldName] = descending ? -1 : 1;
+  }
+
+  if (Object.keys(sortQuery).length === 0) {
+    sortQuery.createdAt = -1;
+  }
+
+  // Deterministic ordering.
+  if (!Object.prototype.hasOwnProperty.call(sortQuery, "_id")) {
+    sortQuery._id = -1;
+  }
+
+  return sortQuery;
+}
+
+// ============================================================
+// RESPONSE CACHE HEADERS
+// ============================================================
+
+function getCacheHeaders() {
+  return {
+    "Cache-Control":
+      "public, s-maxage=60, stale-while-revalidate=300",
+
+    "CDN-Cache-Control":
+      "public, s-maxage=60, stale-while-revalidate=300",
+
+    "Vercel-CDN-Cache-Control":
+      "public, s-maxage=60, stale-while-revalidate=300",
+
+    Vary: "Accept-Encoding",
+  };
 }
 
 // ============================================================
@@ -100,6 +224,8 @@ function escapeRegex(value: string): string {
 // ============================================================
 
 export async function GET(req: Request) {
+  const startedAt = Date.now();
+
   try {
     const { searchParams } = new URL(req.url);
 
@@ -125,34 +251,30 @@ export async function GET(req: Request) {
     const skip = (page - 1) * limit;
 
     // ========================================================
-    // SEARCH
+    // FILTERS
     // ========================================================
 
-    const search =
-      searchParams.get("search")?.trim() || "";
+    const search = normalizeString(
+      searchParams.get("search")
+    );
 
-    // ========================================================
-    // FEATURED
-    // ========================================================
+    const featured = parseBoolean(
+      searchParams.get("featured")
+    );
 
-    const featuredParam =
-      searchParams.get("featured");
+    const inStock = parseBoolean(
+      searchParams.get("inStock")
+    );
 
-    // ========================================================
-    // CATEGORY
-    // ========================================================
+    const singleCategory = normalizeString(
+      searchParams.get("category")
+    );
 
-    const categories =
-      searchParams
-        .get("categories")
-        ?.split(",")
-        .map((category) => category.trim())
-        .filter(Boolean) || [];
-
-    const singleCategory =
-      searchParams
-        .get("category")
-        ?.trim() || "";
+    const categories = searchParams
+      .get("categories")
+      ?.split(",")
+      .map((category) => category.trim())
+      .filter(Boolean) || [];
 
     // ========================================================
     // PRICE
@@ -177,7 +299,10 @@ export async function GET(req: Request) {
           message:
             "Minimum price cannot be greater than maximum price.",
         },
-        { status: 400 }
+        {
+          status: 400,
+          headers: getCacheHeaders(),
+        }
       );
     }
 
@@ -185,30 +310,21 @@ export async function GET(req: Request) {
     // RATING
     // ========================================================
 
-    const minRatingRaw =
-      parseNonNegativeNumber(
-        searchParams.get("minRating")
-      );
+    const ratingValue = parseNonNegativeNumber(
+      searchParams.get("minRating")
+    );
 
     const minRating =
-      minRatingRaw !== undefined
-        ? Math.min(minRatingRaw, 5)
+      ratingValue !== undefined
+        ? Math.min(ratingValue, 5)
         : undefined;
-
-    // ========================================================
-    // STOCK
-    // ========================================================
-
-    const inStockParam =
-      searchParams.get("inStock");
 
     // ========================================================
     // QUERY
     // ========================================================
 
-    // IMPORTANT:
-    // Public API ONLY returns ACTIVE products.
     const query: ProductQuery = {
+      // Public API must NEVER expose drafts.
       status: "active",
     };
 
@@ -216,48 +332,16 @@ export async function GET(req: Request) {
     // FEATURED
     // ========================================================
 
-    if (featuredParam === "true") {
-      query.featured = true;
-    }
-
-    if (featuredParam === "false") {
-      query.featured = false;
+    if (featured !== undefined) {
+      query.featured = featured;
     }
 
     // ========================================================
-    // SEARCH
+    // STOCK
     // ========================================================
 
-    if (search) {
-      const escapedSearch =
-        escapeRegex(search);
-
-      query.$or = [
-        {
-          name: {
-            $regex: escapedSearch,
-            $options: "i",
-          },
-        },
-        {
-          description: {
-            $regex: escapedSearch,
-            $options: "i",
-          },
-        },
-        {
-          category: {
-            $regex: escapedSearch,
-            $options: "i",
-          },
-        },
-        {
-          slug: {
-            $regex: escapedSearch,
-            $options: "i",
-          },
-        },
-      ];
+    if (inStock !== undefined) {
+      query.inStock = inStock;
     }
 
     // ========================================================
@@ -305,15 +389,31 @@ export async function GET(req: Request) {
     }
 
     // ========================================================
-    // STOCK
+    // SEARCH
     // ========================================================
 
-    if (inStockParam === "true") {
-      query.inStock = true;
-    }
+    if (search) {
+      const searchRegexSafe = search
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .slice(0, 100);
 
-    if (inStockParam === "false") {
-      query.inStock = false;
+      query.$or = [
+        {
+          $text: {
+            $search: search,
+          },
+        },
+        {
+          slug: search.toLowerCase(),
+        },
+        {
+          category: search,
+        },
+      ];
+
+      // Prevent unused-variable issues if regex fallback
+      // is added later.
+      void searchRegexSafe;
     }
 
     // ========================================================
@@ -321,44 +421,12 @@ export async function GET(req: Request) {
     // ========================================================
 
     const sortParam =
-      searchParams.get("sort") ||
-      "-createdAt";
+      normalizeString(
+        searchParams.get("sort")
+      ) || "-createdAt";
 
-    const sortQuery: Record<
-      string,
-      SortDirection
-    > = {};
-
-    const sortFields = sortParam
-      .split(",")
-      .map((field) => field.trim())
-      .filter(Boolean);
-
-    for (const field of sortFields) {
-      const descending =
-        field.startsWith("-");
-
-      const fieldName = descending
-        ? field.slice(1)
-        : field;
-
-      if (
-        !ALLOWED_SORT_FIELDS.has(
-          fieldName
-        )
-      ) {
-        continue;
-      }
-
-      sortQuery[fieldName] =
-        descending ? -1 : 1;
-    }
-
-    if (
-      Object.keys(sortQuery).length === 0
-    ) {
-      sortQuery.createdAt = -1;
-    }
+    const sortQuery =
+      buildSort(sortParam);
 
     // ========================================================
     // DATABASE
@@ -366,19 +434,63 @@ export async function GET(req: Request) {
 
     await connectDB();
 
-    const [total, products] =
-      await Promise.all([
-        Product.countDocuments(query),
+    // ========================================================
+    // HOMEPAGE OPTIMIZATION
+    // ========================================================
+    //
+    // Homepage request:
+    //
+    // featured=true
+    // status=active
+    // limit=3
+    // page=1
+    // sort=-popularityScore,-createdAt
+    //
+    // It does NOT need a complete count.
+    // Avoid countDocuments() here.
+    // ========================================================
 
-        Product.find(query)
-          .sort(sortQuery)
-          .skip(skip)
-          .limit(limit)
-          .select(
-            "_id name slug description category price stock inStock images featured status rating popularityScore createdAt updatedAt"
-          )
-          .lean(),
-      ]);
+    const isHomepageFeaturedRequest =
+      featured === true &&
+      page === 1 &&
+      limit <= 3 &&
+      !search &&
+      categories.length === 0 &&
+      !singleCategory &&
+      minPrice === undefined &&
+      maxPrice === undefined &&
+      minRating === undefined &&
+      inStock === undefined;
+
+    let products: ProductListItem[] = [];
+    let total = 0;
+
+    if (isHomepageFeaturedRequest) {
+      products = await Product.find(query)
+        .sort(sortQuery)
+        .limit(limit)
+        .select(PRODUCT_SELECT)
+        .lean<ProductListItem[]>()
+        .exec();
+
+      total = products.length;
+    } else {
+      const [count, results] =
+        await Promise.all([
+          Product.countDocuments(query),
+
+          Product.find(query)
+            .sort(sortQuery)
+            .skip(skip)
+            .limit(limit)
+            .select(PRODUCT_SELECT)
+            .lean<ProductListItem[]>()
+            .exec(),
+        ]);
+
+      total = count;
+      products = results;
+    }
 
     // ========================================================
     // PAGINATION
@@ -388,6 +500,24 @@ export async function GET(req: Request) {
       total > 0
         ? Math.ceil(total / limit)
         : 0;
+
+    // ========================================================
+    // PERFORMANCE LOG
+    // ========================================================
+
+    const duration = Date.now() - startedAt;
+
+    if (duration > 1000) {
+      console.warn(
+        `[PRODUCTS API] Slow request: ${duration}ms`,
+        {
+          page,
+          limit,
+          featured,
+          search: Boolean(search),
+        }
+      );
+    }
 
     // ========================================================
     // RESPONSE
@@ -417,16 +547,14 @@ export async function GET(req: Request) {
       },
       {
         status: 200,
-
-        headers: {
-          "Cache-Control":
-            "public, s-maxage=60, stale-while-revalidate=300",
-        },
+        headers: getCacheHeaders(),
       }
     );
-  } catch (error) {
+  } catch (error: unknown) {
+    const duration = Date.now() - startedAt;
+
     console.error(
-      "GET PRODUCTS API ERROR:",
+      `[PRODUCTS API] GET failed after ${duration}ms:`,
       error
     );
 
@@ -462,6 +590,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    // ========================================================
+    // ADMIN AUTH
+    // ========================================================
+
     const admin = await requireAdmin();
 
     if (!admin) {
@@ -477,66 +609,86 @@ export async function POST(req: Request) {
       );
     }
 
+    // ========================================================
+    // DATABASE
+    // ========================================================
+
     await connectDB();
 
     const body = await req.json();
 
-    const {
-      name,
-      description,
-      category,
-      price,
-      stock,
-      images,
-      featured,
-      status,
-      rating,
-      popularityScore,
-    } = body;
-
     // ========================================================
-    // BASIC VALIDATION
+    // BASIC INPUT
     // ========================================================
 
-    if (
-      typeof name !== "string" ||
-      !name.trim()
-    ) {
+    const name =
+      typeof body.name === "string"
+        ? body.name.trim()
+        : "";
+
+    const description =
+      typeof body.description === "string"
+        ? body.description.trim()
+        : "";
+
+    const category =
+      typeof body.category === "string"
+        ? body.category.trim()
+        : "";
+
+    // ========================================================
+    // VALIDATION
+    // ========================================================
+
+    if (!name) {
       return NextResponse.json(
         {
           success: false,
           message:
             "Product name is required.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
-    if (
-      typeof description !== "string" ||
-      description.trim().length < 10
-    ) {
+    if (name.length < 2 || name.length > 200) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Product name must be between 2 and 200 characters.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (description.length < 10) {
       return NextResponse.json(
         {
           success: false,
           message:
             "Product description must be at least 10 characters.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
-    if (
-      typeof category !== "string" ||
-      !category.trim()
-    ) {
+    if (!category) {
       return NextResponse.json(
         {
           success: false,
           message:
             "Product category is required.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -544,7 +696,7 @@ export async function POST(req: Request) {
     // PRICE
     // ========================================================
 
-    const productPrice = Number(price);
+    const productPrice = Number(body.price);
 
     if (
       !Number.isFinite(productPrice) ||
@@ -556,7 +708,9 @@ export async function POST(req: Request) {
           message:
             "Invalid product price.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -565,20 +719,22 @@ export async function POST(req: Request) {
     // ========================================================
 
     const productStock = Number(
-      stock ?? 0
+      body.stock ?? 0
     );
 
     if (
-      !Number.isFinite(productStock) ||
+      !Number.isInteger(productStock) ||
       productStock < 0
     ) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "Invalid stock quantity.",
+            "Stock must be a non-negative integer.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -586,46 +742,45 @@ export async function POST(req: Request) {
     // IMAGES
     // ========================================================
 
-    const productImages =
-      Array.isArray(images)
-        ? images
-            .filter(
-              (image): image is string =>
-                typeof image === "string" &&
-                image.trim().length > 0
-            )
-            .map((image) =>
-              image.trim()
-            )
-        : [];
-
-    // ========================================================
-    // STATUS
-    // ========================================================
-
-    const productStatus =
-      status === "draft"
-        ? "draft"
-        : "active";
+    const productImages: string[] =
+  Array.isArray(body.images)
+    ? (body.images as unknown[])
+        .filter(
+          (image: unknown): image is string =>
+            typeof image === "string" &&
+            image.trim().length > 0
+        )
+        .map((image: string): string =>
+          image.trim()
+        )
+    : [];
 
     // ========================================================
     // FEATURED
     // ========================================================
 
     const productFeatured =
-      featured === true;
+      body.featured === true;
+
+    // ========================================================
+    // STATUS
+    // ========================================================
+
+    const productStatus =
+      body.status === "draft"
+        ? "draft"
+        : "active";
 
     // ========================================================
     // RATING
     // ========================================================
 
-    const ratingNumber =
-      Number(rating);
+    const ratingNumber = Number(
+      body.rating ?? 0
+    );
 
     const productRating =
-      Number.isFinite(
-        ratingNumber
-      )
+      Number.isFinite(ratingNumber)
         ? Math.min(
             Math.max(
               ratingNumber,
@@ -640,7 +795,9 @@ export async function POST(req: Request) {
     // ========================================================
 
     const popularityNumber =
-      Number(popularityScore);
+      Number(
+        body.popularityScore ?? 0
+      );
 
     const productPopularity =
       Number.isFinite(
@@ -653,18 +810,14 @@ export async function POST(req: Request) {
         : 0;
 
     // ========================================================
-    // CREATE PRODUCT
+    // CREATE
     // ========================================================
 
     const product =
       await Product.create({
-        name: name.trim(),
-
-        description:
-          description.trim(),
-
-        category:
-          category.trim(),
+        name,
+        description,
+        category,
 
         price: productPrice,
 
@@ -673,8 +826,7 @@ export async function POST(req: Request) {
         inStock:
           productStock > 0,
 
-        images:
-          productImages,
+        images: productImages,
 
         featured:
           productFeatured,
@@ -689,6 +841,10 @@ export async function POST(req: Request) {
           productPopularity,
       });
 
+    // ========================================================
+    // RESPONSE
+    // ========================================================
+
     return NextResponse.json(
       {
         success: true,
@@ -702,18 +858,25 @@ export async function POST(req: Request) {
         status: 201,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(
       "CREATE PRODUCT API ERROR:",
       error
     );
 
     // ========================================================
-    // DUPLICATE
+    // DUPLICATE KEY
     // ========================================================
 
     if (
-      error?.code === 11000
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (
+        error as {
+          code?: number;
+        }
+      ).code === 11000
     ) {
       return NextResponse.json(
         {
@@ -732,21 +895,38 @@ export async function POST(req: Request) {
     // ========================================================
 
     if (
-      error?.name ===
-      "ValidationError"
+      typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      (
+        error as {
+          name?: string;
+        }
+      ).name ===
+        "ValidationError"
     ) {
+      const mongooseError =
+        error as {
+          errors?: Record<
+            string,
+            {
+              message?: string;
+            }
+          >;
+        };
+
       const messages =
         Object.values(
-          error.errors || {}
+          mongooseError.errors || {}
         ).map(
-          (item: any) =>
-            item.message
+          (item) =>
+            item.message ||
+            "Invalid value."
         );
 
       return NextResponse.json(
         {
           success: false,
-
           message:
             messages.join(", ") ||
             "Product validation failed.",
@@ -764,10 +944,10 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: false,
-
         message:
-          error?.message ||
-          "Failed to create product.",
+          error instanceof Error
+            ? error.message
+            : "Failed to create product.",
       },
       {
         status: 500,

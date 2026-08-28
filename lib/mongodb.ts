@@ -1,13 +1,24 @@
 import mongoose from "mongoose";
 
-const mongoUri = process.env.MONGO_URI;
+// ============================================================
+// MONGODB CONFIGURATION
+// ============================================================
 
-if (!mongoUri) {
-  throw new Error("MONGO_URI is missing in .env.local");
+const MONGODB_URI = process.env.MONGO_URI;
+
+if (!MONGODB_URI) {
+  throw new Error(
+    "MONGO_URI environment variable is not configured."
+  );
 }
 
-// After the check above, this value is guaranteed to be a string.
-const MONGODB_URI: string = mongoUri;
+// After the runtime check above, explicitly narrow the type.
+const MONGODB_CONNECTION_STRING =
+  MONGODB_URI as string;
+
+// ============================================================
+// MONGOOSE CACHE TYPE
+// ============================================================
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -19,6 +30,10 @@ declare global {
   var mongooseCache: MongooseCache | undefined;
 }
 
+// ============================================================
+// GLOBAL CACHE
+// ============================================================
+
 const cached: MongooseCache =
   global.mongooseCache ?? {
     conn: null,
@@ -26,6 +41,10 @@ const cached: MongooseCache =
   };
 
 global.mongooseCache = cached;
+
+// ============================================================
+// DATABASE CONNECTION
+// ============================================================
 
 async function connectDB(): Promise<typeof mongoose> {
   // Already connected
@@ -36,24 +55,36 @@ async function connectDB(): Promise<typeof mongoose> {
   // Connection already in progress
   if (!cached.promise) {
     cached.promise = mongoose
-      .connect(MONGODB_URI, {
-        serverSelectionTimeoutMS: 10000,
-        connectTimeoutMS: 10000,
-        maxPoolSize: 10,
-        minPoolSize: 0,
+      .connect(MONGODB_CONNECTION_STRING, {
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
+
+        maxPoolSize: 20,
+        minPoolSize: 2,
+
+        maxIdleTimeMS: 30000,
+        socketTimeoutMS: 45000,
+
+        // Prefer IPv4 for local/deployment network compatibility.
+        family: 4,
+
+        // Do not allow queries to silently buffer
+        // while MongoDB is unavailable.
+        bufferCommands: false,
       })
       .then((mongooseInstance) => {
         console.log("MongoDB connected successfully");
 
         return mongooseInstance;
       })
-      .catch((error) => {
-        // Allow next request to retry
+      .catch((error: unknown) => {
         cached.promise = null;
 
         console.error(
           "MongoDB connection failed:",
-          error instanceof Error ? error.message : error
+          error instanceof Error
+            ? error.message
+            : error
         );
 
         throw error;

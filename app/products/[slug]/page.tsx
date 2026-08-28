@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
+import connectDB from "@/lib/mongodb";
+import Product from "@/models/Product";
+
 import ProductDetail from "./ProductDetail";
 
 // ============================================================
@@ -9,7 +12,8 @@ import ProductDetail from "./ProductDetail";
 // ============================================================
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_BASE_URL || "https://deepakkhiraenterprises.netlify.app";
+  process.env.NEXT_PUBLIC_BASE_URL ||
+  "https://deepakkhiraenterprises.netlify.app";
 
 const SITE_NAME = "Deepak Khira Enterprises";
 
@@ -19,34 +23,20 @@ const SITE_NAME = "Deepak Khira Enterprises";
 
 interface Product {
   _id: string;
-
   name: string;
-
   slug: string;
-
   description: string;
-
   category: string;
-
   price: number;
-
   stock: number;
-
   inStock: boolean;
-
   images: string[];
-
   featured: boolean;
-
   status: "active" | "draft";
-
   rating: number;
-
   popularityScore: number;
-
-  createdAt?: string;
-
-  updatedAt?: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 // ============================================================
@@ -60,12 +50,15 @@ interface PageProps {
 }
 
 // ============================================================
-// FETCH PRODUCT
+// GET PRODUCT DIRECTLY FROM MONGODB
 // ============================================================
 //
-// cache() prevents duplicate fetching when
-// generateMetadata() and the page both request
-// the same product.
+// Important:
+// We do NOT call /api/products/[slug] from the server.
+// This removes an unnecessary HTTP request.
+//
+// cache() allows generateMetadata() and the page to reuse
+// the same request during the render.
 // ============================================================
 
 const getProduct = cache(async (slug: string): Promise<Product | null> => {
@@ -75,33 +68,44 @@ const getProduct = cache(async (slug: string): Promise<Product | null> => {
     return null;
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || SITE_URL;
-
   try {
-    const response = await fetch(
-      `${baseUrl}/api/products/${encodeURIComponent(normalizedSlug)}`,
-      {
-        next: {
-          revalidate: 300,
+    await connectDB();
 
-          tags: [`product-${normalizedSlug}`],
-        },
-      }
-    );
+    const product = await Product.findOne({
+      slug: normalizedSlug,
+      status: "active",
+    })
+      .select(
+        "_id name slug description category price stock inStock images featured status rating popularityScore createdAt updatedAt"
+      )
+      .lean();
 
-    if (!response.ok) {
+    if (!product) {
       return null;
     }
 
-    const data = await response.json();
-
-    if (!data?.success || !data?.product) {
-      return null;
-    }
-
-    return data.product as Product;
+    return {
+      _id: String(product._id),
+      name: String(product.name),
+      slug: String(product.slug),
+      description: String(product.description || ""),
+      category: String(product.category || ""),
+      price: Number(product.price || 0),
+      stock: Number(product.stock || 0),
+      inStock: Boolean(product.inStock),
+      images: Array.isArray(product.images) ? product.images.map(String) : [],
+      featured: Boolean(product.featured),
+      status: product.status === "draft" ? "draft" : "active",
+      rating: Number(product.rating || 0),
+      popularityScore: Number(product.popularityScore || 0),
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+    };
   } catch (error) {
-    console.error("PRODUCT FETCH ERROR:", error);
+    console.error(
+      "PRODUCT PAGE DATABASE ERROR:",
+      error instanceof Error ? error.message : error
+    );
 
     return null;
   }
@@ -115,8 +119,12 @@ function cleanText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function createDescription(description: string, productName: string): string {
+function createDescription(description: string): string {
   const cleaned = cleanText(description);
+
+  if (!cleaned) {
+    return `Buy ${SITE_NAME} products online with reliable delivery across India.`;
+  }
 
   if (cleaned.length <= 160) {
     return cleaned;
@@ -143,7 +151,6 @@ export async function generateMetadata({
   if (!product) {
     return {
       title: "Product Not Found",
-
       description: "The requested product could not be found.",
 
       robots: {
@@ -159,7 +166,7 @@ export async function generateMetadata({
 
   const productName = cleanText(product.name);
 
-  const description = createDescription(product.description, productName);
+  const description = createDescription(product.description);
 
   const productUrl = `${SITE_URL}/products/${product.slug}`;
 
@@ -176,43 +183,30 @@ export async function generateMetadata({
 
     robots: {
       index: product.status === "active",
-
       follow: true,
 
       googleBot: {
         index: product.status === "active",
-
         follow: true,
-
         "max-image-preview": "large",
-
         "max-snippet": -1,
-
         "max-video-preview": -1,
       },
     },
 
     openGraph: {
       type: "website",
-
       locale: "en_IN",
-
       url: productUrl,
-
       siteName: SITE_NAME,
-
       title: productName,
-
       description,
 
       images: [
         {
           url: image,
-
           width: 1200,
-
           height: 1200,
-
           alt: productName,
         },
       ],
@@ -220,11 +214,8 @@ export async function generateMetadata({
 
     twitter: {
       card: "summary_large_image",
-
       title: productName,
-
       description,
-
       images: [image],
     },
   };
@@ -267,12 +258,11 @@ export default async function ProductPage({ params }: PageProps) {
 
   const productSchema = {
     "@context": "https://schema.org",
-
     "@type": "Product",
 
     "@id": `${productUrl}#product`,
 
-    name: product.name,
+    name: cleanText(product.name),
 
     description: cleanText(product.description),
 
@@ -303,9 +293,17 @@ export default async function ProductPage({ params }: PageProps) {
       seller: {
         "@type": "Organization",
 
+        "@id": `${SITE_URL}#organization`,
+
         name: SITE_NAME,
 
         url: SITE_URL,
+
+        logo: {
+          "@type": "ImageObject",
+
+          url: `${SITE_URL}/business_logo.png`,
+        },
       },
     },
   };
@@ -363,7 +361,7 @@ export default async function ProductPage({ params }: PageProps) {
   };
 
   // ==========================================================
-  // ORGANIZATION / WEBSITE GRAPH
+  // WEBSITE / ORGANIZATION GRAPH
   // ==========================================================
 
   const websiteSchema = {
@@ -394,11 +392,13 @@ export default async function ProductPage({ params }: PageProps) {
     },
   };
 
+  // ==========================================================
+  // RENDER
+  // ==========================================================
+
   return (
     <>
-      {/* ======================================================
-          PRODUCT SCHEMA
-      ======================================================= */}
+      {/* PRODUCT STRUCTURED DATA */}
 
       <script
         type="application/ld+json"
@@ -407,9 +407,7 @@ export default async function ProductPage({ params }: PageProps) {
         }}
       />
 
-      {/* ======================================================
-          BREADCRUMB SCHEMA
-      ======================================================= */}
+      {/* BREADCRUMB STRUCTURED DATA */}
 
       <script
         type="application/ld+json"
@@ -418,9 +416,7 @@ export default async function ProductPage({ params }: PageProps) {
         }}
       />
 
-      {/* ======================================================
-          WEBSITE SCHEMA
-      ======================================================= */}
+      {/* WEBSITE STRUCTURED DATA */}
 
       <script
         type="application/ld+json"
@@ -429,9 +425,7 @@ export default async function ProductPage({ params }: PageProps) {
         }}
       />
 
-      {/* ======================================================
-          PRODUCT UI
-      ======================================================= */}
+      {/* PRODUCT UI */}
 
       <ProductDetail product={product} />
     </>

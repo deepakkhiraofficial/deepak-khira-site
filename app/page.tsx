@@ -7,32 +7,45 @@ import ProductsSection from "@/components/sections/ProductsSection";
 import WhyChooseUs from "@/components/sections/WhyChooseUs";
 import WhatsAppButton from "@/components/sections/WhatsAppButton";
 import NewsletterForm from "@/components/sections/NewsletterForm";
+import Link from "next/link";
 
 // ============================================================
 // SITE CONFIG
 // ============================================================
 
-const SITE_URL = "https://deepak-khira-enterprises.in";
+const SITE_URL =
+  process.env.NEXT_PUBLIC_BASE_URL ||
+  "https://deepakkhiraenterprises.netlify.app";
 
 const SITE_NAME = "Deepak Khira Enterprises";
 
-const DESCRIPTION =
-  "Deepak Khira Enterprises is an India-based e-commerce and business enterprise offering quality products, wholesale supply, distribution and digital business solutions.";
+const SITE_DESCRIPTION =
+  "Deepak Khira Enterprises is an India-based e-commerce and business enterprise offering quality products, wholesale supply, distribution, trading and digital business solutions.";
+
+const SITE_PHONE = "+91-9109001109";
+
+const SITE_EMAIL = "deepakkhiraenterprises@gmail.com";
+
+// ============================================================
+// METADATA
+// ============================================================
 
 export const metadata: Metadata = {
-  title: "Deepak Khira Enterprises | Shop Quality Products Online",
+  title: "Deepak Khira Enterprises | Online Shopping & Business Solutions",
 
-  description: DESCRIPTION,
+  description: SITE_DESCRIPTION,
 
   keywords: [
     "Deepak Khira Enterprises",
+    "Deepak Khira",
     "online shopping India",
     "e-commerce India",
     "quality products India",
     "wholesale supplier India",
     "product distributor India",
     "online seller India",
-    "Deepak Khira",
+    "digital business solutions",
+    "business solutions India",
   ],
 
   authors: [
@@ -45,38 +58,10 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
 
+  metadataBase: new URL(SITE_URL),
+
   alternates: {
     canonical: "/",
-  },
-
-  openGraph: {
-    type: "website",
-    locale: "en_IN",
-    url: SITE_URL,
-    siteName: SITE_NAME,
-
-    title: "Deepak Khira Enterprises | Shop Quality Products Online",
-
-    description: DESCRIPTION,
-
-    images: [
-      {
-        url: "/business_logo.png",
-        width: 1200,
-        height: 630,
-        alt: SITE_NAME,
-      },
-    ],
-  },
-
-  twitter: {
-    card: "summary_large_image",
-
-    title: "Deepak Khira Enterprises | Shop Quality Products Online",
-
-    description: DESCRIPTION,
-
-    images: ["/business_logo.png"],
   },
 
   robots: {
@@ -91,10 +76,44 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
+
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+
+    url: SITE_URL,
+
+    siteName: SITE_NAME,
+
+    title: "Deepak Khira Enterprises | Online Shopping & Business Solutions",
+
+    description: SITE_DESCRIPTION,
+
+    images: [
+      {
+        url: "/business_logo.png",
+        width: 1200,
+        height: 630,
+        alt: "Deepak Khira Enterprises",
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+
+    title: "Deepak Khira Enterprises | Online Shopping & Business Solutions",
+
+    description: SITE_DESCRIPTION,
+
+    images: ["/business_logo.png"],
+  },
+
+  category: "ecommerce",
 };
 
 // ============================================================
-// STRUCTURED DATA
+// ORGANIZATION SCHEMA
 // ============================================================
 
 const organizationSchema = {
@@ -104,6 +123,7 @@ const organizationSchema = {
   "@id": `${SITE_URL}/#organization`,
 
   name: SITE_NAME,
+
   url: SITE_URL,
 
   logo: {
@@ -111,10 +131,11 @@ const organizationSchema = {
     url: `${SITE_URL}/business_logo.png`,
   },
 
-  description: DESCRIPTION,
+  description: SITE_DESCRIPTION,
 
-  telephone: "+91-9109001109",
-  email: "deepakkhiraenterprises@gmail.com",
+  telephone: SITE_PHONE,
+
+  email: SITE_EMAIL,
 
   address: {
     "@type": "PostalAddress",
@@ -126,12 +147,16 @@ const organizationSchema = {
 
   contactPoint: {
     "@type": "ContactPoint",
-    telephone: "+91-9109001109",
+    telephone: SITE_PHONE,
     contactType: "customer support",
     areaServed: "IN",
     availableLanguage: ["English", "Hindi"],
   },
 };
+
+// ============================================================
+// WEBSITE SCHEMA
+// ============================================================
 
 const websiteSchema = {
   "@context": "https://schema.org",
@@ -140,9 +165,10 @@ const websiteSchema = {
   "@id": `${SITE_URL}/#website`,
 
   name: SITE_NAME,
+
   url: SITE_URL,
 
-  description: DESCRIPTION,
+  description: SITE_DESCRIPTION,
 
   publisher: {
     "@id": `${SITE_URL}/#organization`,
@@ -151,10 +177,13 @@ const websiteSchema = {
   inLanguage: "en-IN",
 };
 
-const ecommerceSchema = {
-  "@context": "https://schema.org",
+// ============================================================
+// ONLINE STORE SCHEMA
+// ============================================================
 
-  "@type": "Store",
+const storeSchema = {
+  "@context": "https://schema.org",
+  "@type": "OnlineStore",
 
   "@id": `${SITE_URL}/#store`,
 
@@ -162,13 +191,15 @@ const ecommerceSchema = {
 
   url: SITE_URL,
 
+  logo: `${SITE_URL}/business_logo.png`,
+
   image: `${SITE_URL}/business_logo.png`,
 
-  description: DESCRIPTION,
+  description: SITE_DESCRIPTION,
 
-  telephone: "+91-9109001109",
+  telephone: SITE_PHONE,
 
-  email: "deepakkhiraenterprises@gmail.com",
+  email: SITE_EMAIL,
 
   address: {
     "@type": "PostalAddress",
@@ -192,7 +223,7 @@ export default function Home() {
   return (
     <>
       {/* ======================================================
-          ORGANIZATION
+          ORGANIZATION STRUCTURED DATA
       ======================================================= */}
 
       <Script
@@ -204,7 +235,7 @@ export default function Home() {
       />
 
       {/* ======================================================
-          WEBSITE
+          WEBSITE STRUCTURED DATA
       ======================================================= */}
 
       <Script
@@ -216,30 +247,32 @@ export default function Home() {
       />
 
       {/* ======================================================
-          STORE
+          ONLINE STORE STRUCTURED DATA
       ======================================================= */}
 
       <Script
         id="store-schema"
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(ecommerceSchema),
+          __html: JSON.stringify(storeSchema),
         }}
       />
 
       <main className="min-h-screen overflow-x-hidden bg-white text-slate-900">
         {/* ====================================================
-            01 — HERO
+            HERO
         ===================================================== */}
 
-        <Hero />
+        <section aria-label="Deepak Khira Enterprises">
+          <Hero />
+        </section>
 
         {/* ====================================================
-            02 — TRUST BAR
+            TRUST BAR
         ===================================================== */}
 
         <section
-          aria-label="Why shop with us"
+          aria-label="Why shop with Deepak Khira Enterprises"
           className="border-y border-slate-200 bg-white"
         >
           <div className="mx-auto grid max-w-7xl grid-cols-2 md:grid-cols-4">
@@ -276,19 +309,24 @@ export default function Home() {
         </section>
 
         {/* ====================================================
-            03 — FEATURED PRODUCTS
+            FEATURED PRODUCTS
         ===================================================== */}
 
-        <section id="products">
+        <section id="products" aria-labelledby="featured-products-heading">
+          <h2 id="featured-products-heading" className="sr-only">
+            Featured Products
+          </h2>
+
           <ProductsSection />
         </section>
 
         {/* ====================================================
-            04 — BUSINESS INTRODUCTION
+            BUSINESS INTRODUCTION
         ===================================================== */}
 
         <section
           id="business"
+          aria-labelledby="business-heading"
           className="border-y border-slate-200 bg-slate-50"
         >
           <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-12">
@@ -298,7 +336,10 @@ export default function Home() {
                   About Our Business
                 </p>
 
-                <h2 className="mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                <h2
+                  id="business-heading"
+                  className="mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl"
+                >
                   More than an online store.
                 </h2>
 
@@ -312,7 +353,7 @@ export default function Home() {
                 <div className="mt-7">
                   <a
                     href="#about"
-                    className="inline-flex items-center rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600"
+                    className="inline-flex items-center rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
                     Learn More About Us
                   </a>
@@ -326,7 +367,10 @@ export default function Home() {
                       key={item}
                       className="rounded-2xl border border-slate-200 bg-white p-7"
                     >
-                      <div className="mb-5 h-2 w-10 rounded-full bg-blue-600" />
+                      <div
+                        aria-hidden="true"
+                        className="mb-5 h-2 w-10 rounded-full bg-blue-600"
+                      />
 
                       <h3 className="text-base font-bold text-slate-900">
                         {item}
@@ -345,32 +389,35 @@ export default function Home() {
         </section>
 
         {/* ====================================================
-            05 — ABOUT
+            ABOUT
         ===================================================== */}
 
-        <section id="about">
+        <section id="about" aria-label="About Deepak Khira Enterprises">
           <AboutUs />
         </section>
 
         {/* ====================================================
-            06 — WHY CHOOSE US
+            WHY CHOOSE US
         ===================================================== */}
 
-        <section id="why-us">
+        <section id="why-us" aria-label="Why choose Deepak Khira Enterprises">
           <WhyChooseUs />
         </section>
 
         {/* ====================================================
-            07 — SHOP CTA
+            SHOP CTA
         ===================================================== */}
 
-        <section className="bg-slate-950">
+        <section aria-labelledby="shop-cta-heading" className="bg-slate-950">
           <div className="mx-auto max-w-7xl px-6 py-20 text-center sm:px-8 lg:px-12">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-400">
               Discover Our Collection
             </p>
 
-            <h2 className="mx-auto mt-4 max-w-3xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h2
+              id="shop-cta-heading"
+              className="mx-auto mt-4 max-w-3xl text-3xl font-bold tracking-tight text-white sm:text-4xl"
+            >
               Find products selected for quality, value and everyday use.
             </h2>
 
@@ -380,31 +427,33 @@ export default function Home() {
             </p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <a
+              <Link
                 href="/products"
-                className="rounded-xl bg-white px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-blue-50"
+                className="rounded-xl bg-white px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-950"
               >
                 Shop All Products
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/contact"
-                className="rounded-xl border border-slate-700 px-6 py-3 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900"
+                className="rounded-xl border border-slate-700 px-6 py-3 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-950"
               >
                 Contact Us
-              </a>
+              </Link>
             </div>
           </div>
         </section>
 
         {/* ====================================================
-            08 — NEWSLETTER
+            NEWSLETTER
         ===================================================== */}
 
-        <NewsletterForm />
+        <section aria-label="Newsletter">
+          <NewsletterForm />
+        </section>
 
         {/* ====================================================
-            09 — WHATSAPP
+            WHATSAPP SUPPORT
         ===================================================== */}
 
         <WhatsAppButton />
