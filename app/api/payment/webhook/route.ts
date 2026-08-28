@@ -11,69 +11,64 @@ function verifyWebhookSignature(
   signature: string,
   secret: string
 ): boolean {
-  const expected =
-    crypto
-      .createHmac(
-        "sha256",
-        secret
-      )
-      .update(rawBody)
-      .digest("hex");
+  if (!signature) return false;
+
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
 
   if (
-    !/^[a-f0-9]{64}$/i.test(
-      expected
-    ) ||
-    !/^[a-f0-9]{64}$/i.test(
-      signature
-    )
+    !/^[a-f0-9]{64}$/i.test(expected) ||
+    !/^[a-f0-9]{64}$/i.test(signature)
   ) {
     return false;
   }
 
-  const a = Buffer.from(
-    expected,
-    "hex"
-  );
+  const expectedBuffer = Buffer.from(expected, "hex");
+  const receivedBuffer = Buffer.from(signature, "hex");
 
-  const b = Buffer.from(
-    signature,
-    "hex"
-  );
+  if (
+    expectedBuffer.length !==
+    receivedBuffer.length
+  ) {
+    return false;
+  }
 
-  return (
-    a.length === b.length &&
-    crypto.timingSafeEqual(a, b)
+  return crypto.timingSafeEqual(
+    expectedBuffer,
+    receivedBuffer
   );
 }
 
-export async function POST(
-  req: Request
-) {
+export async function POST(req: Request) {
   try {
+    // ========================================================
+    // WEBHOOK SECRET
+    // ========================================================
+
     const webhookSecret =
-      process.env
-        .RAZORPAY_WEBHOOK_SECRET;
+      process.env.RAZORPAY_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
       console.error(
-        "RAZORPAY_WEBHOOK_SECRET missing."
+        "RAZORPAY_WEBHOOK_SECRET is missing."
       );
 
       return NextResponse.json(
         {
           success: false,
+          message: "Webhook is not configured.",
         },
         { status: 500 }
       );
     }
 
-    /*
-     * IMPORTANT:
-     * Read raw body BEFORE JSON parsing.
-     */
-    const rawBody =
-      await req.text();
+    // ========================================================
+    // RAW BODY
+    // ========================================================
+
+    const rawBody = await req.text();
 
     const signature =
       req.headers.get(
@@ -88,32 +83,52 @@ export async function POST(
         webhookSecret
       )
     ) {
+      console.error(
+        "RAZORPAY WEBHOOK SIGNATURE INVALID"
+      );
+
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Invalid webhook signature.",
+          message: "Invalid webhook signature.",
         },
         { status: 400 }
       );
     }
 
-    const payload =
-      JSON.parse(rawBody);
+    // ========================================================
+    // PARSE PAYLOAD
+    // ========================================================
 
-    const event =
-      payload?.event;
+    let payload: any;
 
-    /*
-     * Ignore unsupported events.
-     */
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid JSON payload.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const event = payload?.event;
+
+    console.log(
+      "RAZORPAY WEBHOOK EVENT:",
+      event
+    );
+
+    // ========================================================
+    // EVENT
+    // ========================================================
+
     if (
-      event !==
-        "payment.captured" &&
-      event !==
-        "payment.failed" &&
-      event !==
-        "order.paid"
+      event !== "payment.captured" &&
+      event !== "order.paid" &&
+      event !== "payment.failed"
     ) {
       return NextResponse.json(
         {
@@ -124,41 +139,48 @@ export async function POST(
       );
     }
 
+    // ========================================================
+    // PAYMENT ENTITY
+    // ========================================================
+
     const paymentEntity =
-      payload?.payload
-        ?.payment?.entity;
+      payload?.payload?.payment?.entity;
 
     const orderEntity =
-      payload?.payload
-        ?.order?.entity;
+      payload?.payload?.order?.entity;
 
     const paymentId =
-      paymentEntity?.id;
+      paymentEntity?.id || "";
 
     const razorpayOrderId =
       paymentEntity?.order_id ||
-      orderEntity?.id;
+      orderEntity?.id ||
+      "";
 
-    if (
-      !paymentId ||
-      !razorpayOrderId
-    ) {
+    if (!razorpayOrderId) {
+      console.error(
+        "RAZORPAY WEBHOOK: ORDER ID MISSING"
+      );
+
       return NextResponse.json(
         {
-          success: true,
-          ignored: true,
+          success: false,
+          message: "Razorpay order ID missing.",
         },
-        { status: 200 }
+        { status: 400 }
       );
     }
 
+    // ========================================================
+    // DATABASE
+    // ========================================================
+
     await connectDB();
 
-    const order =
-      await Order.findOne({
-        "payment.razorpayOrderId":
-          razorpayOrderId,
-      });
+    const order = await Order.findOne({
+      "payment.razorpayOrderId":
+        razorpayOrderId,
+    });
 
     if (!order) {
       console.error(
@@ -166,29 +188,81 @@ export async function POST(
         razorpayOrderId
       );
 
-      /*
-       * Return 200 so Razorpay does not
-       * repeatedly retry an event that
-       * cannot be mapped.
-       */
+      // Return non-2xx so Razorpay can retry.
       return NextResponse.json(
         {
-          success: true,
-          ignored: true,
+          success: false,
+          message: "Internal order not found.",
         },
-        { status: 200 }
+        { status: 404 }
       );
     }
 
-    /*
-     * PAYMENT CAPTURED
-     */
+    // ========================================================
+    // PAYMENT CAPTURED
+    // ========================================================
+
     if (
-      event ===
-        "payment.captured" ||
-      event ===
-        "order.paid"
+      event === "payment.captured" ||
+      event === "order.paid"
     ) {
+      // ------------------------------------------------------
+      // Amount validation
+      // ------------------------------------------------------
+
+      if (paymentEntity?.amount != null) {
+        const expectedAmount = Math.round(
+          Number(order.totalPrice) * 100
+        );
+
+        if (
+          Number(paymentEntity.amount) !==
+          expectedAmount
+        ) {
+          console.error(
+            "RAZORPAY WEBHOOK AMOUNT MISMATCH",
+            {
+              expectedAmount,
+              receivedAmount:
+                paymentEntity.amount,
+              orderId:
+                order._id.toString(),
+            }
+          );
+
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Payment amount mismatch.",
+            },
+            { status: 400 }
+          );
+        }
+      }
+
+      // ------------------------------------------------------
+      // Currency validation
+      // ------------------------------------------------------
+
+      if (
+        paymentEntity?.currency &&
+        paymentEntity.currency !== "INR"
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Payment currency mismatch.",
+          },
+          { status: 400 }
+        );
+      }
+
+      // ------------------------------------------------------
+      // Idempotency
+      // ------------------------------------------------------
+
       if (
         order.payment.status !==
         "captured"
@@ -196,67 +270,87 @@ export async function POST(
         order.payment.status =
           "captured";
 
-        order.payment.paid =
-          true;
+        order.payment.paid = true;
 
         order.payment.paidAt =
           order.payment.paidAt ||
           new Date();
 
-        order.payment
-          .razorpayPaymentId =
-          paymentId;
+        if (paymentId) {
+          order.payment.razorpayPaymentId =
+            paymentId;
 
-        order.payment
-          .transactionId =
-          paymentId;
+          order.payment.transactionId =
+            paymentId;
+        }
 
-        order.payment
-          .failureReason = "";
+        order.payment.failureReason = "";
+
+        // ----------------------------------------------------
+        // Order status
+        // ----------------------------------------------------
 
         if (
-          order.status ===
-          "placed"
+          order.status === "placed"
         ) {
           order.status =
             "confirmed";
         }
 
-        const exists =
-  order.statusHistory.some(
-    (entry: {
-      status?: string;
-      message?: string;
-      createdAt?: Date;
-    }) =>
-      entry.message ===
-      "Online payment captured successfully."
-  );
+        // ----------------------------------------------------
+        // Status history
+        // ----------------------------------------------------
 
-        if (!exists) {
+        const alreadyRecorded =
+          order.statusHistory.some(
+            (entry: {
+              status?: string;
+              message?: string;
+            }) =>
+              entry.message ===
+              "Online payment captured successfully."
+          );
+
+        if (!alreadyRecorded) {
           order.statusHistory.push({
-            status:
-              "confirmed",
-
+            status: "confirmed",
             message:
               "Online payment captured successfully.",
-
-            createdAt:
-              new Date(),
+            createdAt: new Date(),
           });
         }
 
         await order.save();
+
+        console.log(
+          "RAZORPAY PAYMENT CAPTURED:",
+          {
+            internalOrderId:
+              order._id.toString(),
+            razorpayOrderId,
+            paymentId,
+          }
+        );
       }
+
+      return NextResponse.json(
+        {
+          success: true,
+          message:
+            "Payment captured successfully.",
+        },
+        { status: 200 }
+      );
     }
 
-    /*
-     * PAYMENT FAILED
-     */
+    // ========================================================
+    // PAYMENT FAILED
+    // ========================================================
+
     if (
-      event ===
-      "payment.failed"
+      event === "payment.failed"
     ) {
+      // Never overwrite a captured payment
       if (
         order.payment.status !==
         "captured"
@@ -267,18 +361,39 @@ export async function POST(
         order.payment.paid =
           false;
 
-        order.payment
-          .razorpayPaymentId =
-          paymentId;
+        if (paymentId) {
+          order.payment.razorpayPaymentId =
+            paymentId;
+        }
 
-        order.payment
-          .failureReason =
+        order.payment.failureReason =
           paymentEntity
             ?.error_description ||
+          paymentEntity
+            ?.error_reason ||
           "Razorpay payment failed.";
 
         await order.save();
+
+        console.log(
+          "RAZORPAY PAYMENT FAILED:",
+          {
+            internalOrderId:
+              order._id.toString(),
+            razorpayOrderId,
+            paymentId,
+          }
+        );
       }
+
+      return NextResponse.json(
+        {
+          success: true,
+          message:
+            "Payment failure recorded.",
+        },
+        { status: 200 }
+      );
     }
 
     return NextResponse.json(
@@ -296,6 +411,8 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
+        message:
+          "Webhook processing failed.",
       },
       { status: 500 }
     );
